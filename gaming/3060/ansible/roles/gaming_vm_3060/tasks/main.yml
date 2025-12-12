@@ -1,0 +1,124 @@
+---
+- name: Ensure VM storage directory exists
+  file:
+    path: "{{ vm_storage_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Validate Ubuntu ISO exists
+  stat:
+    path: "{{ vm_iso_path }}"
+  register: iso_check
+
+- name: Fail if ISO is missing
+  fail:
+    msg: "ISO file not found at {{ vm_iso_path }}"
+  when: not iso_check.stat.exists
+
+- name: Validate shared game-data disk exists
+  stat:
+    path: "{{ vm_game_disk }}"
+  register: game_disk_check
+
+- name: Fail if game disk missing
+  fail:
+    msg: "Game disk missing: {{ vm_game_disk }} — Run game-disk-setup.sh first."
+  when: not game_disk_check.stat.exists
+
+- name: Create OS disk if missing
+  command: qemu-img create -f qcow2 "{{ vm_os_disk }}" "{{ vm_os_disk_size }}"
+  args:
+    creates: "{{ vm_os_disk }}"
+
+- name: Define gaming VM using virt module
+  virt:
+    name: "{{ vm_name }}"
+    memory_mb: "{{ vm_ram_mb }}"
+    vcpus: "{{ vm_vcpus }}"
+    cpu: host-passthrough
+    disks:
+      - name: "{{ vm_name }}-os"
+        path: "{{ vm_os_disk }}"
+        size: "{{ vm_os_disk_size }}"
+        bus: virtio
+      - name: "{{ vm_name }}-games"
+        path: "{{ vm_game_disk }}"
+        bus: virtio
+    cdrom: "{{ vm_iso_path }}"
+    os_variant: ubuntu22.04
+    machine: q35
+    boot: uefi
+    graphics:
+      type: spice
+    video:
+      type: virtio
+    network:
+      - network: default
+    state: defined
+
+# === Copy in-guest gaming setup script to staging area ===
+- name: Create staging directory for in-guest script
+  file:
+    path: "{{ vm_in_guest_script_staging_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Copy in-guest setup script to staging directory
+  copy:
+    src: "{{ vm_in_guest_script_source }}"
+    dest: "{{ vm_in_guest_script_staging_dir }}/{{ vm_in_guest_script_name }}"
+    mode: "0755"
+
+- name: Print script copy location
+  debug:
+    msg: |
+      In-guest gaming setup script copied to:
+        {{ vm_in_guest_script_staging_dir }}/{{ vm_in_guest_script_name }}
+
+      To transfer into the VM:
+        scp {{ vm_in_guest_script_staging_dir }}/{{ vm_in_guest_script_name }} user@VM-IP:~/
+      Or via virt-manager:
+        View → File Transfer → Choose this script
+
+- name: Display next-step instructions
+  debug:
+    msg: |
+      Gaming VM '{{ vm_name }}' successfully created.
+
+      === HOST ACTION REQUIRED (RTX 3060 Passthrough Script) ===
+      Run the following script on the HOST:
+          bash scripts/gaming/3060/gpu_passthrough_config.sh
+
+      This will:
+        - Detect the RTX 3060 GPU + HDMI audio PCI IDs
+        - Check IOMMU/VFIO readiness
+        - Print the exact IDs to attach in virt-manager
+
+      === VM ACTION REQUIRED (Gaming Setup Script) ===
+      The in-guest setup script has been staged at:
+          {{ vm_in_guest_script_staging_dir }}/{{ vm_in_guest_script_name }}
+
+      After installing Ubuntu inside the VM:
+        1. Transfer the script into the VM:
+             scp {{ vm_in_guest_script_staging_dir }}/{{ vm_in_guest_script_name }} user@VM-IP:~/
+             OR use virt-manager → View → File Transfer
+
+        2. Inside the VM, run:
+             {{ vm_in_guest_script_name }}
+             bash {{ vm_in_guest_script_name }}
+
+      === GPU ATTACH IN VIRT-MANAGER ===
+        1. Shut down the VM
+        2. Open virt-manager → Add Hardware → PCI Host Device:
+              - RTX 3060 GPU
+              - RTX 3060 HDMI Audio
+        3. Remove "Video Virtio"
+        4. Set Display → None
+        5. Boot VM using a monitor connected to the RTX 3060
+
+      === Next Steps ===
+      Once inside the VM:
+        - Install NVIDIA proprietary drivers
+        - Log in to Steam and Battle.net on /mnt/games
+
+

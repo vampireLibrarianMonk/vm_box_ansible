@@ -1,0 +1,7 @@
+---
+- name: Base VM Infrastructure Setup
+  hosts: localhost
+  become: yes
+
+  roles:
+    - base_vm

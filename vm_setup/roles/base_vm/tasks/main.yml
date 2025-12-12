@@ -1,0 +1,68 @@
+---
+- name: Update APT package index
+  apt:
+    update_cache: yes
+
+- name: Install QEMU KVM hypervisor
+  apt:
+    name: qemu-kvm
+    state: present
+
+- name: Install libvirt system daemon
+  apt:
+    name: libvirt-daemon-system
+    state: present
+
+- name: Install libvirt clients
+  apt:
+    name: libvirt-clients
+    state: present
+
+- name: Install virt-manager
+  apt:
+    name: virt-manager
+    state: present
+
+- name: Install OVMF (UEFI firmware)
+  apt:
+    name: ovmf
+    state: present
+
+- name: Install bridge-utils
+  apt:
+    name: bridge-utils
+    state: present
+
+- name: Install pciutils
+  apt:
+    name: pciutils
+    state: present
+
+- name: Install usbutils
+  apt:
+    name: usbutils
+    state: present
+
+- name: Enable & start libvirtd service
+  systemd:
+    name: libvirtd
+    enabled: yes
+    state: started
+
+- name: Add user to libvirt and libvirt-qemu groups
+  user:
+    name: "{{ lookup('env', 'USER') }}"
+    groups: "libvirt,libvirt-qemu"
+    append: yes
+
+- name: Create VM storage directory
+  file:
+    path: "{{ vm_storage_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Display completion message
+  debug:
+    msg: |
+      Base VM Infrastructure Setup Complete.
+      REBOOT recommended before creating VMs.

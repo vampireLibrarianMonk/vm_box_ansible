@@ -1,0 +1,6 @@
+---
+# Optional variables for the base_vm role.
+# Override these in playbooks or host_vars/group_vars if needed.
+
+# Example override (uncomment to use a non-default VM storage path):
+# vm_storage_dir: "/mnt/vmstore"

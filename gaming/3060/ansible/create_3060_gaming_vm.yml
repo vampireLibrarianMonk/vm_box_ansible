@@ -1,0 +1,7 @@
+---
+- name: Create Gaming VM with RTX 3060 Passthrough
+  hosts: localhost
+  become: yes
+
+  roles:
+    - gaming_vm_3060

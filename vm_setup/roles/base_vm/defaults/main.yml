@@ -1,0 +1,2 @@
+---
+vm_storage_dir: "{{ lookup('env', 'HOME') }}/vms"
