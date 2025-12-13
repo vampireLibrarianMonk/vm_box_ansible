@@ -29,16 +29,31 @@ This stage converts the machine into a **KVM/libvirt hypervisor**.
 
 ### Command
 ```bash
-ansible-playbook vm_setup/base_vm_setup.yml
+ansible-playbook vm_setup/base_vm_setup.yml \
+  --ask-become-pass
+
 ```
 
-### Expected Result
-- libvirt running
-- virt-manager launches
-- `~/vms` directory exists
-- No VMs created yet
+### Post Check
+```bash
+ansible-playbook vm_setup/base_vm_setup.yml \
+  --tags postcheck \
+  --ask-become-pass
+```
 
-**Reboot recommended after this step.**
+### Expected Output:
+```bash
+TASK [postcheck : POSTCHECK | Success summary] *********************************************************************************************************************************************************************************************************************************************************************
+ok: [localhost] => 
+  msg:
+  - libvirt running and enabled
+  - virt-manager installed
+  - KVM acceleration available
+  - VM storage directory exists and empty
+  - No libvirt VMs defined
+  - System ready for VM creation
+  - Reboot recommended
+```
 
 ---
 

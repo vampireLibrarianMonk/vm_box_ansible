@@ -1,0 +1,154 @@
+---
+- name: POSTCHECK | Gather package facts
+  ansible.builtin.package_facts:
+    manager: auto
+
+# -------------------------------------------------------------------
+# libvirt checks
+# -------------------------------------------------------------------
+
+- name: POSTCHECK | Assert libvirt is installed
+  ansible.builtin.assert:
+    that:
+      - "'libvirt-daemon' in ansible_facts.packages
+         or 'libvirt-daemon-system' in ansible_facts.packages"
+    fail_msg: "libvirt is not installed"
+
+- name: POSTCHECK | Check libvirtd service state
+  ansible.builtin.systemd:
+    name: "{{ libvirt_service }}"
+  register: libvirt_status
+
+- name: POSTCHECK | Assert libvirtd active and enabled
+  ansible.builtin.assert:
+    that:
+      - libvirt_status.status.ActiveState == "active"
+      - libvirt_status.status.UnitFileState in ["enabled", "enabled-runtime"]
+    fail_msg: "libvirtd is not running or not enabled"
+
+- name: POSTCHECK | Verify libvirt socket
+  ansible.builtin.stat:
+    path: /var/run/libvirt/libvirt-sock
+  register: libvirt_socket
+
+- name: POSTCHECK | Assert libvirt socket exists
+  ansible.builtin.assert:
+    that:
+      - libvirt_socket.stat.exists
+    fail_msg: "libvirt socket missing"
+
+# -------------------------------------------------------------------
+# virt-manager
+# -------------------------------------------------------------------
+
+- name: POSTCHECK | Check virt-manager binary
+  ansible.builtin.command: which virt-manager
+  register: virt_manager_bin
+  changed_when: false
+  failed_when: virt_manager_bin.rc != 0
+
+# -------------------------------------------------------------------
+# KVM / virtualization
+# -------------------------------------------------------------------
+
+- name: POSTCHECK | Verify /dev/kvm exists
+  ansible.builtin.stat:
+    path: /dev/kvm
+  register: kvm_device
+
+- name: POSTCHECK | Assert KVM available
+  ansible.builtin.assert:
+    that:
+      - kvm_device.stat.exists
+    fail_msg: "/dev/kvm not present (check BIOS virtualization)"
+
+- name: POSTCHECK | Check CPU virtualization flags
+  ansible.builtin.shell: egrep -c '(vmx|svm)' /proc/cpuinfo
+  register: virt_flags
+  changed_when: false
+
+- name: POSTCHECK | Assert CPU supports virtualization
+  ansible.builtin.assert:
+    that:
+      - virt_flags.stdout | int > 0
+    fail_msg: "CPU virtualization flags not detected"
+
+# -------------------------------------------------------------------
+# User permissions
+# -------------------------------------------------------------------
+
+- name: POSTCHECK | Check original user group membership
+  become: false
+  ansible.builtin.command: groups
+  register: user_groups
+  changed_when: false
+
+- name: POSTCHECK | Assert user in libvirt group
+  ansible.builtin.assert:
+    that:
+      - "'libvirt' in user_groups.stdout"
+    fail_msg: "User not in libvirt group (logout/login required)"
+
+- name: POSTCHECK | Assert user in libvirt group
+  ansible.builtin.assert:
+    that:
+      - "'{{ libvirt_group }}' in user_groups.stdout"
+    fail_msg: "User not in libvirt group (logout/login required)"
+
+# -------------------------------------------------------------------
+# VM storage
+# -------------------------------------------------------------------
+
+- name: POSTCHECK | Verify VM storage directory
+  ansible.builtin.stat:
+    path: "{{ vm_storage_dir }}"
+  register: vms_dir
+
+- name: POSTCHECK | Assert VM storage directory valid
+  ansible.builtin.assert:
+    that:
+      - vms_dir.stat.exists
+      - vms_dir.stat.isdir
+    fail_msg: "VM storage directory missing or invalid"
+
+- name: POSTCHECK | Ensure VM directory empty
+  ansible.builtin.find:
+    paths: "{{ vm_storage_dir }}"
+    file_type: any
+  register: vms_contents
+
+- name: POSTCHECK | Assert no VM files exist
+  ansible.builtin.assert:
+    that:
+      - vms_contents.matched == 0
+    fail_msg: "Unexpected files found in VM storage directory"
+
+# -------------------------------------------------------------------
+# libvirt inventory
+# -------------------------------------------------------------------
+
+- name: POSTCHECK | List defined libvirt VMs
+  ansible.builtin.command: virsh list --all
+  register: virsh_list
+  changed_when: false
+
+- name: POSTCHECK | Assert no VMs defined
+  ansible.builtin.assert:
+    that:
+      - virsh_list.stdout_lines | length <= 2
+    fail_msg: "libvirt already has VMs defined"
+
+# -------------------------------------------------------------------
+# Summary
+# -------------------------------------------------------------------
+
+- name: POSTCHECK | Success summary
+  ansible.builtin.debug:
+    msg:
+      - "libvirt running and enabled"
+      - "virt-manager installed"
+      - "KVM acceleration available"
+      - "VM storage directory exists and empty"
+      - "No libvirt VMs defined"
+      - "System ready for VM creation"
+      - "Reboot recommended"

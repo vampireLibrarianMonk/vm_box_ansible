@@ -1,0 +1,8 @@
+# Expected VM storage directory
+vm_storage_dir: "{{ lookup('env','HOME') }}/vms"
+
+# Expected libvirt service name
+libvirt_service: libvirtd
+
+# Expected virtualization group
+libvirt_group: libvirt
