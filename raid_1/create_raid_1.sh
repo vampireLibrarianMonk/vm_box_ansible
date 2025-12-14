@@ -1,96 +1,114 @@
-#!/bin/bash
-# create-raid1.sh
-#
-# Prepare two NVMe drives for an Ubuntu 22.04 RAID1 install:
-#   - /dev/nvme0n1
-#   - /dev/nvme1n1
-#
-# This will:
-#   * STOP any existing mdadm arrays
-#   * ERASE ALL DATA on both disks
-#   * Create:
-#       - 1 GiB EFI System partition on each disk
-#       - RAID member partition using the remaining space on each disk
-#   * Create /dev/md0 as a RAID1 array
-#   * Format:
-#       - /dev/md0 as ext4
-#       - both EFI partitions as FAT32
-#
-# Run this from a Ubuntu Live environment (Ubuntu Desktop ISO Try OS) *before* running the server installer.
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-set -euo pipefail
+#############################################
+# RAID-1 NVMe Setup Script (Ubuntu Live ISO)
+# - Detects exactly two NVMe drives
+# - Wipes all metadata
+# - Creates EFI + RAID partitions
+# - Builds mdadm RAID-1 array
+#############################################
 
-DISK1="/dev/nvme0n1"
-DISK2="/dev/nvme1n1"
-
-echo "=== WARNING ==="
-echo "This will ERASE ALL DATA on: ${DISK1} and ${DISK2}"
-read -rp "Type 'YES' to continue: " CONFIRM
-if [[ "${CONFIRM}" != "YES" ]]; then
-  echo "Aborting."
+if [[ $EUID -ne 0 ]]; then
+  echo "ERROR: Run this script as root (sudo)."
   exit 1
 fi
 
-echo "=== Stopping any existing mdadm arrays ==="
+echo "=== RAID-1 NVMe Setup (DESTRUCTIVE) ==="
+echo "This will ERASE all data on BOTH NVMe drives."
+echo
+read -rp "Type 'YES' to continue: " CONFIRM
+if [[ "$CONFIRM" != "YES" ]]; then
+  echo "Aborted."
+  exit 1
+fi
+
+echo
+echo "[1] Detecting NVMe drives..."
+
+mapfile -t NVME_DISKS < <(lsblk -ndo NAME,TYPE | awk '$2=="disk" && $1 ~ /^nvme/ {print "/dev/"$1}')
+
+if [[ ${#NVME_DISKS[@]} -ne 2 ]]; then
+  echo "ERROR: Expected exactly 2 NVMe disks, found ${#NVME_DISKS[@]}."
+  printf 'Found: %s\n' "${NVME_DISKS[@]}"
+  exit 1
+fi
+
+DISK1="${NVME_DISKS[0]}"
+DISK2="${NVME_DISKS[1]}"
+
+echo "Detected NVMe disks:"
+echo "  $DISK1"
+echo "  $DISK2"
+
+echo
+echo "[2] Stopping any existing RAID arrays..."
 mdadm --stop --scan || true
 
-echo "=== Wiping RAID superblocks (if any) ==="
-mdadm --zero-superblock "${DISK1}"* 2>/dev/null || true
-mdadm --zero-superblock "${DISK2}"* 2>/dev/null || true
+echo
+echo "[3] Wiping filesystem, RAID, and partition metadata..."
 
-echo "=== Wiping partition tables and filesystem signatures ==="
-wipefs -a "${DISK1}" || true
-wipefs -a "${DISK2}" || true
-sgdisk --zap-all "${DISK1}" || true
-sgdisk --zap-all "${DISK2}" || true
+for d in "$DISK1" "$DISK2"; do
+  echo "Wiping $d..."
+  wipefs -a "$d"
+  mdadm --zero-superblock --force "${d}"* || true
+  sgdisk --zap-all "$d"
+  dd if=/dev/zero of="$d" bs=1M count=10 status=none
+done
 
-echo "=== Creating new GPT on both disks ==="
-sgdisk -og "${DISK1}"
-sgdisk -og "${DISK2}"
+echo
+echo "[4] Creating GPT partition tables..."
 
-echo "=== Creating partitions on ${DISK1} ==="
-# Partition 1: 1 GiB EFI System (FAT32)
-sgdisk -n1:0:+1G -t1:EF00 "${DISK1}"
-# Partition 2: rest of disk for RAID
-sgdisk -n2:0:0   -t2:FD00 "${DISK1}"
+for d in "$DISK1" "$DISK2"; do
+  echo "Partitioning $d..."
+  sgdisk \
+    -n 1:0:+1G    -t 1:ef00 -c 1:"EFI System" \
+    -n 2:0:0      -t 2:fd00 -c 2:"Linux RAID" \
+    "$d"
+done
 
-echo "=== Mirroring layout from ${DISK1} to ${DISK2} ==="
-sgdisk -R="${DISK2}" "${DISK1}"
-sgdisk -G "${DISK2}"  # new disk GUID
+echo
+echo "[5] Informing kernel of partition changes..."
+partprobe
+sleep 2
 
-echo "=== Current partition tables ==="
-sgdisk -p "${DISK1}"
-sgdisk -p "${DISK2}"
+EFI1="${DISK1}p1"
+EFI2="${DISK2}p1"
+RAID1="${DISK1}p2"
+RAID2="${DISK2}p2"
 
-PART1_DISK1="${DISK1}p1"
-PART2_DISK1="${DISK1}p2"
-PART1_DISK2="${DISK2}p1"
-PART2_DISK2="${DISK2}p2"
+echo
+echo "[6] Creating RAID-1 array (/dev/md0)..."
 
-echo "=== Creating RAID1 array /dev/md0 ==="
 mdadm --create /dev/md0 \
   --level=1 \
   --raid-devices=2 \
-  "${PART2_DISK1}" \
-  "${PART2_DISK2}"
-
-echo "Waiting a few seconds for md0 to assemble..."
-sleep 3
-cat /proc/mdstat || true
-
-echo "=== Creating filesystems ==="
-# Root filesystem on RAID
-mkfs.ext4 -L root_raid1 /dev/md0
-
-# EFI partitions (one active, one backup)
-mkfs.vfat -F32 -n EFI1 "${PART1_DISK1}"
-mkfs.vfat -F32 -n EFI2 "${PART1_DISK2}"
-
-echo "=== Resulting block devices ==="
-lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT
+  "$RAID1" "$RAID2"
 
 echo
-echo "RAID1 preparation complete."
-echo "- Use /dev/md0 as root (/) during Ubuntu Server install."
-echo "- Use ${PART1_DISK1} as EFI mounted at /boot/efi."
-echo "- Leave ${PART1_DISK2} as an unmounted backup EFI."
+echo "[7] Waiting for RAID device..."
+udevadm settle
+sleep 2
+
+echo
+echo "[8] Formatting RAID filesystem (ext4)..."
+mkfs.ext4 -F /dev/md0
+
+echo
+echo "[9] Creating EFI filesystems..."
+mkfs.vfat -F32 "$EFI1"
+mkfs.vfat -F32 "$EFI2"
+
+echo
+echo "=== RAID-1 SETUP COMPLETE ==="
+echo
+echo "Created:"
+echo "  EFI partitions: $EFI1 , $EFI2"
+echo "  RAID device:    /dev/md0"
+echo
+echo "You may now:"
+echo "  - Launch the Ubuntu installer"
+echo "  - Mount /dev/md0 as / (root)"
+echo "  - Use either EFI partition as /boot/efi"
+echo
+echo "NOTE: After install, ensure mdadm is installed and initramfs updated."

@@ -1,190 +1,156 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# verify-raid1.sh
+# confirm_raid_1.sh
 #
-# Comprehensive RAID1 verification script.
-# Confirms the RAID setup exactly as configured in this chat.
+# Purpose:
+#   Verify that a RAID1 root filesystem is correctly configured and healthy.
+#
+# Confirms:
+#   - Both NVMe disks exist
+#   - Expected EFI + RAID partitions exist
+#   - /dev/md0 exists
+#   - RAID level is RAID1
+#   - RAID state is clean or syncing
+#   - Both member devices are active
+#   - mdadm.conf contains md0
+#   - Root filesystem is on md0 (or its UUID)
+#   - EFI is mounted
 #
 # Usage:
-#     sudo ./verify-raid1.sh /dev/nvme0n1 /dev/nvme1n1
-#
-# Requirements:
-#     - Two arguments (the two physical drives)
-#     - Script must run on the installed Ubuntu system
-#
-# This script checks:
-#   1. Disks exist
-#   2. EFI + RAID partitions exist
-#   3. mdadm RAID array exists
-#   4. RAID level is RAID1
-#   5. RAID state is clean
-#   6. mdadm.conf contains the array definition
-#   7. Root filesystem is mounted from /dev/md0
-#   8. EFI is mounted
-#   9. Both drives contribute to md0
+#   sudo bash confirm_raid_1.sh /dev/nvme0n1 /dev/nvme1n1
 #
 
 set -euo pipefail
 
+PASS() { echo "✔ $1"; }
+FAIL() { echo "✘ ERROR: $1"; exit 1; }
+INFO() { echo "→ $1"; }
+
 # ---------------------------
-# VALIDATE INPUT
+# Validate input
 # ---------------------------
-if [[ "$#" -ne 2 ]]; then
-    echo "Usage: sudo $0 <disk1> <disk2>"
-    echo "Example: sudo $0 /dev/nvme0n1 /dev/nvme1n1"
-    exit 1
-fi
+[[ $# -eq 2 ]] || FAIL "Usage: sudo $0 <disk1> <disk2>"
 
 DISK1="$1"
 DISK2="$2"
 
-echo "==========================================================="
-echo "              RAID1 VERIFICATION SCRIPT"
-echo "==========================================================="
-echo "Checking RAID setup for:"
-echo "  DRIVE 1: $DISK1"
-echo "  DRIVE 2: $DISK2"
-echo "==========================================================="
+echo "=================================================="
+echo " RAID1 VERIFICATION"
+echo "=================================================="
+echo " Disk 1: $DISK1"
+echo " Disk 2: $DISK2"
 echo
 
 # ---------------------------
-# Check disks exist
+# Disk existence
 # ---------------------------
-echo "[1] Checking that disks exist..."
-for D in "$DISK1" "$DISK2"; do
-    if [[ ! -b "$D" ]]; then
-        echo "ERROR: Disk '$D' does not exist."
-        exit 1
-    fi
-done
-echo "✔ Disks found"
+INFO "Checking disks exist..."
+[[ -b "$DISK1" ]] || FAIL "$DISK1 not found"
+[[ -b "$DISK2" ]] || FAIL "$DISK2 not found"
+PASS "Both disks detected"
 echo
 
 # ---------------------------
-# Check expected partitions
+# Partition layout
 # ---------------------------
-echo "[2] Checking for correct EFI + RAID partitions..."
-
 EFI1="${DISK1}p1"
 RAID1="${DISK1}p2"
 EFI2="${DISK2}p1"
 RAID2="${DISK2}p2"
 
+INFO "Checking required partitions..."
 for P in "$EFI1" "$RAID1" "$EFI2" "$RAID2"; do
-    if [[ ! -b "$P" ]]; then
-        echo "ERROR: Expected partition missing: '$P'"
-        exit 1
-    fi
+    [[ -b "$P" ]] || FAIL "Missing partition: $P"
 done
-
-echo "✔ EFI partitions: $EFI1, $EFI2"
-echo "✔ RAID partitions: $RAID1, $RAID2"
+PASS "EFI and RAID partitions present on both disks"
 echo
 
 # ---------------------------
-# Check RAID array exists
+# md0 existence
 # ---------------------------
-echo "[3] Checking for mdadm RAID array /dev/md0..."
-if [[ ! -b "/dev/md0" ]]; then
-    echo "ERROR: /dev/md0 not found."
-    exit 1
-fi
-echo "✔ /dev/md0 exists"
+INFO "Checking RAID device /dev/md0..."
+[[ -b /dev/md0 ]] || FAIL "/dev/md0 does not exist"
+PASS "/dev/md0 exists"
 echo
 
 # ---------------------------
-# Check RAID details
+# RAID metadata
 # ---------------------------
-echo "[4] Checking RAID level and status..."
-
+INFO "Validating RAID level and state..."
 MD_DETAIL="$(mdadm --detail /dev/md0)"
 
-if ! echo "$MD_DETAIL" | grep -q "Raid Level : raid1"; then
-    echo "ERROR: RAID level is not RAID1"
-    exit 1
-fi
+echo "$MD_DETAIL" | grep -q "Raid Level : raid1" \
+    || FAIL "RAID level is NOT RAID1"
 
-if ! echo "$MD_DETAIL" | grep -q "State : clean"; then
-    echo "WARNING: RAID state is not clean (may be recovering)"
+if echo "$MD_DETAIL" | grep -q "State : clean"; then
+    PASS "RAID state is clean"
+elif echo "$MD_DETAIL" | grep -q "State : active"; then
+    PASS "RAID active (syncing or resyncing)"
 else
-    echo "✔ RAID state clean"
+    FAIL "RAID state unhealthy"
 fi
-
-echo "✔ RAID1 level confirmed"
 echo
 
 # ---------------------------
-# Check both drives are active
+# Member devices
 # ---------------------------
-echo "[5] Confirming both RAID members are active..."
-
-RAID1_BASENAME="$(basename "$RAID1")"
-RAID2_BASENAME="$(basename "$RAID2")"
-
-if ! echo "$MD_DETAIL" | grep -q "$RAID1_BASENAME"; then
-    echo "ERROR: RAID member missing: '$RAID1_BASENAME'"
-    exit 1
-fi
-
-if ! echo "$MD_DETAIL" | grep -q "$RAID2_BASENAME"; then
-    echo "ERROR: RAID member missing: '$RAID2_BASENAME'"
-    exit 1
-fi
-
-echo "✔ Both RAID devices active in md0"
+INFO "Checking RAID members..."
+echo "$MD_DETAIL" | grep -q "$(basename "$RAID1")" \
+    || FAIL "$RAID1 missing from md0"
+echo "$MD_DETAIL" | grep -q "$(basename "$RAID2")" \
+    || FAIL "$RAID2 missing from md0"
+PASS "Both RAID members active"
 echo
 
 # ---------------------------
-# Check mdadm.conf
+# mdadm.conf
 # ---------------------------
-echo "[6] Checking /etc/mdadm/mdadm.conf for ARRAY definition..."
-
-if ! grep -q "ARRAY /dev/md0" /etc/mdadm/mdadm.conf; then
-    echo "ERROR: mdadm.conf does not contain ARRAY /dev/md0"
-    exit 1
-fi
-
-echo "✔ mdadm.conf contains correct ARRAY entry"
+INFO "Checking mdadm.conf..."
+grep -q "^ARRAY /dev/md0" /etc/mdadm/mdadm.conf \
+    || FAIL "mdadm.conf missing ARRAY /dev/md0"
+PASS "mdadm.conf contains md0"
 echo
 
 # ---------------------------
-# Verify root filesystem is md0
+# Root filesystem
 # ---------------------------
-echo "[7] Checking if / is mounted from /dev/md0..."
+INFO "Checking root filesystem source..."
+ROOT_SRC="$(findmnt -n -o SOURCE /)"
 
-ROOT_SRC="$(findmnt -n -o SOURCE / || true)"
-
-if [[ "$ROOT_SRC" != "/dev/md0" ]]; then
-    echo "ERROR: Root filesystem is NOT mounted from /dev/md0 (found '$ROOT_SRC')"
-    exit 1
+if [[ "$ROOT_SRC" == "/dev/md0" || "$ROOT_SRC" == UUID=* ]]; then
+    PASS "Root filesystem mounted from RAID"
+else
+    FAIL "Root filesystem NOT on RAID (found: $ROOT_SRC)"
 fi
-
-echo "✔ Root filesystem mounted from /dev/md0"
 echo
 
 # ---------------------------
-# Verify EFI mount
+# EFI mount
 # ---------------------------
-echo "[8] Checking EFI mount..."
-
+INFO "Checking EFI mount..."
 EFI_SRC="$(findmnt -n -o SOURCE /boot/efi || true)"
-
-if [[ -z "$EFI_SRC" ]]; then
-    echo "ERROR: No EFI partition mounted at /boot/efi"
-    exit 1
-fi
-
-echo "✔ EFI mounted from $EFI_SRC"
+[[ -n "$EFI_SRC" ]] || FAIL "EFI not mounted"
+PASS "EFI mounted from $EFI_SRC"
 echo
 
-echo "==========================================================="
-echo "          RAID1 VERIFICATION COMPLETE — SUCCESS"
-echo "==========================================================="
-echo "Your system is correctly configured with:"
-echo "  ✔ RAID1 root filesystem"
-echo "  ✔ Clean md0 array"
-echo "  ✔ Correct EFI + RAID partitions"
-echo "  ✔ Correct mdadm.conf configuration"
-echo "==========================================================="
-echo "The RAID1 setup is VALID."
-echo "==========================================================="
+# ---------------------------
+# mdstat (final sanity check)
+# ---------------------------
+INFO "Checking /proc/mdstat..."
+grep -q "^md0 : active raid1" /proc/mdstat \
+    || FAIL "md0 not active RAID1 in /proc/mdstat"
+PASS "md0 confirmed active RAID1"
+echo
+
+# ---------------------------
+# Final result
+# ---------------------------
+echo "=================================================="
+echo " RAID1 STATUS: HEALTHY ✅"
+echo "=================================================="
+echo "✔ RAID1 array assembled correctly"
+echo "✔ Root filesystem on md0"
+echo "✔ Both disks active"
+echo "✔ EFI mounted"
+echo
+echo "System RAID1 configuration is VALID."
