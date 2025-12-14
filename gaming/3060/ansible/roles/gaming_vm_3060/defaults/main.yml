@@ -10,7 +10,7 @@ vm_game_disk: "{{ vm_storage_dir }}/game-data.qcow2"
 # Copy the in-guest setup script
 vm_in_guest_script_staging_dir: "{{ vm_storage_dir }}/{{ vm_name }}-in-guest"
 vm_in_guest_script_name: "in_guest_gaming_setup.sh"
-vm_in_guest_script_source: "scripts/gaming/3060/in_guest_gaming_setup.sh"
+vm_in_guest_script_source: "in_guest_gaming_setup.sh"
 
 # Set your Ubuntu ISO path
-vm_iso_path: "{{ lookup('env','HOME') }}/isos/ubuntu-22.04.5.iso"
+vm_iso_path: "{{ lookup('env','HOME') }}/isos/ubuntu-22.04.5-desktop-amd64.iso"

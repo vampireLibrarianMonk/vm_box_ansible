@@ -1,0 +1,2 @@
+expected_gpu_model: "RTX 3060"
+expected_vm_name: "gpu-3060-gaming"

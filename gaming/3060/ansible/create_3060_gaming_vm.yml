@@ -4,4 +4,8 @@
   become: yes
 
   roles:
-    - gaming_vm_3060
+  - role: gaming_vm_3060
+    tags: create
+  - role: gaming_postcheck
+    tags: postcheck
+

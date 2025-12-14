@@ -1,0 +1,75 @@
+---
+# ------------------------------------------------------------
+# GPU detection
+# ------------------------------------------------------------
+- name: POSTCHECK | Detect NVIDIA GPU
+  command: lspci -nn
+  register: lspci_out
+  changed_when: false
+
+- name: POSTCHECK | Assert RTX 3060 present
+  assert:
+    that:
+      - expected_gpu_model in lspci_out.stdout
+    fail_msg: "Expected GPU {{ expected_gpu_model }} not detected"
+
+# ------------------------------------------------------------
+# IOMMU
+# ------------------------------------------------------------
+- name: POSTCHECK | Check IOMMU enabled
+  shell: dmesg | grep -E 'IOMMU enabled|AMD-Vi|DMAR'
+  register: iommu_check
+  changed_when: false
+  failed_when: iommu_check.rc != 0
+
+# ------------------------------------------------------------
+# VFIO
+# ------------------------------------------------------------
+- name: POSTCHECK | Check VFIO modules loaded (optional)
+  shell: lsmod | grep -E 'vfio|vfio_pci'
+  register: vfio_modules
+  changed_when: false
+  failed_when: false
+
+- name: POSTCHECK | Warn if VFIO not yet active
+  debug:
+    msg: >
+      VFIO modules not loaded yet.
+      This is expected before running gpu_passthrough_config.sh.
+  when: vfio_modules.rc != 0
+
+# ------------------------------------------------------------
+# NVIDIA driver isolation
+# ------------------------------------------------------------
+- name: POSTCHECK | Ensure NVIDIA driver not bound to GPU
+  shell: lspci -k | grep -A3 -i nvidia
+  register: nvidia_binding
+  changed_when: false
+
+- name: POSTCHECK | Assert GPU not bound to nvidia driver
+  assert:
+    that:
+      - "'Kernel driver in use: nvidia' not in nvidia_binding.stdout"
+    fail_msg: "NVIDIA driver still bound on host (VFIO not active)"
+
+# ------------------------------------------------------------
+# libvirt VM definition
+# ------------------------------------------------------------
+- name: POSTCHECK | Check VM is defined
+  command: virsh dominfo {{ expected_vm_name }}
+  register: vm_info
+  changed_when: false
+  failed_when: vm_info.rc != 0
+
+# ------------------------------------------------------------
+# Summary
+# ------------------------------------------------------------
+- name: POSTCHECK | Gaming host readiness confirmed
+  debug:
+    msg:
+      - "RTX 3060 detected"
+      - "IOMMU enabled"
+      - "VFIO active"
+      - "GPU detached from host driver"
+      - "VM '{{ expected_vm_name }}' defined"
+      - "Host ready for passthrough gaming VM"

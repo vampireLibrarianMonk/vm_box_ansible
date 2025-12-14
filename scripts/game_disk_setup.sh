@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+if [[ $EUID -eq 0 ]]; then
+  echo "Do not run this script as root. Run as your normal user."
+  exit 1
+fi
+
 ###############################################################################
 # Shared Game Data Disk Setup Script
 # Usage:
-#   ./game-disk-setup.sh <DISK_SIZE> [VMS_DIR]
+#   bash scripts/game_disk_setup.sh <DISK_SIZE> [VMS_DIR]
 #
 # Example:
-#   ./game-disk-setup.sh 120G
-#   ./game-disk-setup.sh 150G /mnt/vmstore
+#   bash scripts/game_disk_setup.sh 120G
+#   bash scripts/game_disk_setup.sh 150G /mnt/vmstore
 #
 # Arguments:
 #   DISK_SIZE - required, qcow2 size (e.g., 100G, 120G, 200G)
@@ -46,6 +51,14 @@ echo "VM storage directory: $VMS_DIR"
 
 echo "[1] Ensuring VM storage directory exists..."
 mkdir -p "$VMS_DIR"
+
+# Ensure directory is owned by the invoking user
+if [[ ! -w "$VMS_DIR" ]]; then
+    echo "ERROR: $VMS_DIR is not writable by user $(whoami)"
+    echo "Fix with:"
+    echo "  sudo chown -R $(whoami):$(whoami) $VMS_DIR"
+    exit 1
+fi
 
 echo "[2] Checking qemu-img availability..."
 if ! command -v qemu-img >/dev/null 2>&1; then

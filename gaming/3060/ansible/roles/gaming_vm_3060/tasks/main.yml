@@ -30,31 +30,15 @@
   args:
     creates: "{{ vm_os_disk }}"
 
-- name: Define gaming VM using virt module
-  virt:
-    name: "{{ vm_name }}"
-    memory_mb: "{{ vm_ram_mb }}"
-    vcpus: "{{ vm_vcpus }}"
-    cpu: host-passthrough
-    disks:
-      - name: "{{ vm_name }}-os"
-        path: "{{ vm_os_disk }}"
-        size: "{{ vm_os_disk_size }}"
-        bus: virtio
-      - name: "{{ vm_name }}-games"
-        path: "{{ vm_game_disk }}"
-        bus: virtio
-    cdrom: "{{ vm_iso_path }}"
-    os_variant: ubuntu22.04
-    machine: q35
-    boot: uefi
-    graphics:
-      type: spice
-    video:
-      type: virtio
-    network:
-      - network: default
-    state: defined
+- name: Render gaming VM XML
+  template:
+    src: "{{ role_path }}/templates/gaming_vm.xml.j2"
+    dest: "/tmp/{{ vm_name }}.xml"
+
+- name: Define gaming VM
+  command: virsh define /tmp/{{ vm_name }}.xml
+  args:
+    creates: "/etc/libvirt/qemu/{{ vm_name }}.xml"
 
 # === Copy in-guest gaming setup script to staging area ===
 - name: Create staging directory for in-guest script
