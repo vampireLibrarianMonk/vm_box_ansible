@@ -1,11 +1,11 @@
-# Ubuntu 22.04 Fresh Install (XFCE + iGPU-Safe Baseline)
+# Ubuntu 22.04 Fresh Install (XFCE + AMD iGPU‑Safe Baseline)
 
 **Target system**
 - CPU: AMD Ryzen 7 5700G (Cezanne iGPU)
 - dGPU: NVIDIA RTX 3060 (for passthrough later)
-- Motherboard: ASUS TUF GAMING B550M-PLUS WiFi II
-- Storage: RAID-1 (/dev/md0)
-- Goal: Stable host using iGPU + lightweight desktop (XFCE)
+- Motherboard: ASUS TUF GAMING B550M‑PLUS WiFi II
+- Storage: RAID‑1 (mdadm, root on md0 via UUID)
+- Goal: Stable host using AMD iGPU + lightweight desktop (XFCE)
 
 ---
 
@@ -14,7 +14,7 @@
 Enter BIOS → Advanced Mode (F7)
 
 ### Boot
-- CSM → Enabled
+- CSM → **Enabled**
 - Secure Boot:
   - OS Type → Other OS
   - Secure Boot Keys → **None installed**
@@ -22,11 +22,11 @@ Enter BIOS → Advanced Mode (F7)
 - Boot Mode → UEFI
 
 ### Advanced → NB Configuration
-- Primary Video Device → IGFX Video
-- iGPU Multi-Monitor → Enabled
-- UMA Frame Buffer Size → 512M
+- Primary Video Device → **IGFX Video**
+- iGPU Multi‑Monitor → Enabled
+- UMA Frame Buffer Size → 512M (or Auto if unavailable)
 
-**Important:** Plug monitor into motherboard HDMI/DP, NOT the RTX 3060.
+**Important:** Plug monitor into motherboard HDMI/DP, **NOT** the RTX 3060.
 
 Save & Exit.
 
@@ -35,42 +35,72 @@ Save & Exit.
 ## 1. INSTALL UBUNTU
 
 Boot Ubuntu installer USB:
-- Select Try / Install Ubuntu
-- Press F6
-- Choose Safe graphics
+- Select **Try / Install Ubuntu**
+- Press **F6**
+- Choose **Safe graphics** (installer only)
 
-Install Ubuntu normally (RAID setup as required).
+Install Ubuntu normally (configure RAID‑1 as required).
 
 ---
 
-## 2. FIRST BOOT — VERIFY GRUB
+## 2. FIRST BOOT — INSTALL A MODERN KERNEL (REQUIRED)
 
-Check GRUB configuration:
+Ubuntu 22.04 ships with kernel **5.15**, which contains a known
+VGACON ↔ amdgpu race condition that causes black screens on AMD APUs,
+especially on RAID systems.
+
+### Install HWE Kernel (6.5+)
+
+```bash
+sudo apt update
+sudo apt install --install-recommends linux-generic-hwe-22.04
+sudo reboot
+```
+
+### Confirm Kernel Version
+
+```bash
+uname -r
+```
+
+Expected:
+```
+6.5.x-generic  (or newer)
+```
+
+---
+
+## 3. GRUB CONFIGURATION (FINAL, CLEAN)
+
+Verify GRUB settings:
 
 ```bash
 cat /etc/default/grub
 ```
 
-It must contain:
+Ensure **NO graphics‑killing parameters** are present.
+
+### Correct configuration:
 
 ```bash
-GRUB_CMDLINE_LINUX_DEFAULT="quiet root=/dev/md0 rootdelay=10 rd.auto video=efifb:off"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet root=UUID=<RAID-UUID> rootdelay=10 rd.auto"
 ```
+
+> ❌ Do NOT use: `nomodeset`, `video=efifb:off`, `vesafb:off`
 
 Apply changes:
 
 ```bash
 sudo update-grub
-sudo update-initramfs -u -k all
+sudo update-initramfs -u
+sudo reboot
 ```
-
-Reboot once.
 
 ---
 
-## 3. INSTALL LIGHTWEIGHT DESKTOP (XFCE)
+## 4. INSTALL LIGHTWEIGHT DESKTOP (XFCE)
 
-From a TTY login:
+From TTY or SSH:
 
 ```bash
 sudo apt update
@@ -78,59 +108,76 @@ sudo apt install -y xfce4 xfce4-goodies
 startxfce4
 ```
 
-Do NOT install:
+Do **NOT** install:
 - gdm3
 - sddm
 - NVIDIA drivers
 
 ---
 
-## 4. VERIFY iGPU IS IN USE
+## 5. VERIFY AMD iGPU IS ACTIVE
 
-Run:
+### Kernel + Driver Check
 
 ```bash
-lspci -nnk | grep -A4 -Ei "vga|display"
+uname -r
+lsmod | grep amdgpu
+```
+
+Expected:
+- amdgpu module loaded
+
+### PCI Driver Binding
+
+```bash
+lspci -nnk | grep -A3 VGA
 ```
 
 Expected:
 - AMD Cezanne
-- Kernel modules: amdgpu
+- `Kernel driver in use: amdgpu`
+
+### DRM Devices
 
 ```bash
-lsmod | grep -E "nvidia|nouveau|simple"
-```
-
-Expected: **no output**
-
-```bash
-loginctl show-session $(loginctl | awk '/tty/{print $1}') -p Type
+ls /sys/class/drm/
 ```
 
 Expected:
-```text
-Type=tty
+- cardX entries
+- renderD128
+
+### Kernel Log Confirmation
+
+```bash
+dmesg | grep -i amdgpu | tail -20
 ```
 
+Expected:
+- `[drm] Initialized amdgpu`
+- `fb0: amdgpudrmfb frame buffer device`
+
 ---
 
-## 5. SAFE OPERATING RULES
+## 6. SAFE OPERATING RULES
 
-- Use startxfce4 (no display manager)
+- Keep monitor connected to motherboard output
 - Do NOT install NVIDIA drivers on host
-- Do NOT re-enable Secure Boot
-- Do NOT add nomodeset to GRUB
-- Keep monitor on motherboard output
+- Do NOT re‑enable Secure Boot
+- Do NOT add `nomodeset`
+- Use XFCE without a display manager
 
 ---
 
-## 6. READY FOR GPU PASSTHROUGH
+## 7. READY FOR GPU PASSTHROUGH
 
-You may now safely:
+System is now stable and graphics‑safe.
+
+You may now:
 - Enable IOMMU
-- Bind RTX 3060 to vfio-pci
-- Develop Ansible GPU passthrough roles
-- Create libvirt VMs
+- Bind RTX 3060 to `vfio-pci`
+- Create libvirt / KVM VMs
+- Automate passthrough with Ansible
 
 ---
 
@@ -140,11 +187,19 @@ You may now safely:
 lspci | grep -Ei "vga|display"
 ```
 
-Should list AMD only.
+Expected:
+- AMD iGPU only
 
 ---
 
 ## FINAL NOTE
 
-Following this guide prevents black screens and firmware conflicts on
-Ryzen APU + NVIDIA passthrough systems.
+This configuration permanently resolves black‑screen boot failures on
+Ubuntu 22.04 systems using:
+- AMD Ryzen APUs
+- UEFI
+- mdadm RAID
+- Headless‑lean or lightweight desktop setups
+
+Kernel 6.5+ eliminates the amdgpu VGACON race entirely.
+
