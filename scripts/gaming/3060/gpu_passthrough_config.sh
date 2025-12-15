@@ -3,16 +3,8 @@ set -Eeuo pipefail
 
 echo "=== RTX 3060 Passthrough Helper Script ==="
 
-echo "[1] Checking IOMMU status..."
-if ! dmesg | grep -qi "IOMMU enabled"; then
-    echo "WARNING: IOMMU may not be enabled. Ensure GRUB has:"
-    echo "    amd_iommu=on iommu=pt"
-else
-    echo "IOMMU detected."
-fi
-
 echo ""
-echo "[2] Detecting RTX 3060 GPU and audio function..."
+echo "[1] Detecting RTX 3060 GPU and audio function..."
 
 GPU=$(lspci -nn | grep -i "NVIDIA" | grep "VGA" | awk '{print $1}')
 AUDIO=$(lspci -nn | grep -i "NVIDIA" | grep "Audio" | awk '{print $1}')
