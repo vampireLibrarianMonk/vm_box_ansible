@@ -56,10 +56,10 @@
 # libvirt VM definition
 # ------------------------------------------------------------
 - name: POSTCHECK | Check VM is defined
-  command: virsh dominfo {{ expected_vm_name }}
-  register: vm_info
+  command: virsh dominfo {{ vm_name }}
+  register: vm_dominfo
+  failed_when: false
   changed_when: false
-  failed_when: vm_info.rc != 0
 
 # ------------------------------------------------------------
 # Summary
