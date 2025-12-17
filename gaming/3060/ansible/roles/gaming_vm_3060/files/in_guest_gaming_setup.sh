@@ -153,6 +153,9 @@ flatpak override --user --filesystem=/mnt net.lutris.Lutris
 echo "  - Installing Lutris (Flatpak)"
 flatpak install -y flathub net.lutris.Lutris
 
+echo "  - Installing ProtonPlus (Flatpak)"
+flatpak install -y flathub com.vysp3r.ProtonPlus
+
 echo ""
 
 ###############################################################################
