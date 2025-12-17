@@ -11,7 +11,13 @@
     <boot dev='hd'/>
   </os>
 
-  <cpu mode='host-passthrough'/>
+  <cpu mode='host-passthrough' check='none' migratable='on'>
+    <topology
+      sockets='{{ vm_cpu_sockets }}'
+      dies='{{ vm_cpu_dies }}'
+      cores='{{ vm_cpu_cores }}'
+      threads='{{ vm_cpu_threads }}'/>
+  </cpu>
 
   <features>
     <acpi/>

@@ -5,7 +5,15 @@ vm_name: "gpu-3060-gaming"
 # VM resources
 vm_os_disk_size: "50G"
 vm_ram_mb: 16384
+
+# Total vCPUs exposed to guest
 vm_vcpus: 8
+
+# Explicit CPU topology (prevents scheduler thrash)
+vm_cpu_sockets: 1
+vm_cpu_dies: 1
+vm_cpu_cores: 8
+vm_cpu_threads: 1
 
 ###############################################################################
 # LIBVIRT STORAGE (REQUIRED)
