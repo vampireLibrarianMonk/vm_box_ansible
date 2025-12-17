@@ -59,9 +59,12 @@ Open **virt-manager** → select **gpu-3060-gaming** → **Open** → **View Det
 - Add **both** devices:
   - `01:00.0` → **NVIDIA RTX 3060 GPU**
   - `01:00.1` → **NVIDIA HDMI Audio**
+- Ensure you add **keyboard** and **mouse** via either
+  - USB
+  - PS2
 
 > ⚠️ Both devices must be added or audio will not work and the GPU may fail to initialize.
-
+> ⚠️ Mouse and keyboard are necessary to do things.
 ---
 
 #### Firmware (Verify)
@@ -87,6 +90,8 @@ virsh start gpu-3060-gaming
 You should see the **Ubuntu installer on the physical monitor**, not inside virt-manager.
 
 ---
+
+The follow the initial setup of ubuntu 22.04.5 [here](setup/Initial_Ubuntu_22_04_05_Setup.md)
 
 ## Stage 5 — Identify the VM IP Address (From Host)
 
