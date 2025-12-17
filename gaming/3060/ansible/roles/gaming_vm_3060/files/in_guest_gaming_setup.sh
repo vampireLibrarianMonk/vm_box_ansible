@@ -24,6 +24,23 @@ echo "============================================================"
 echo ""
 
 ###############################################################################
+# 0. OpenSSH Server Setup
+###############################################################################
+
+echo "[0/5] Setting up OpenSSH Server..."
+
+# Install OpenSSH server
+sudo apt-get update
+sudo apt-get install -y openssh-server
+
+# Enable and start SSH service
+sudo systemctl enable --now ssh
+
+# Diagnostic: confirm SSH is listening on port 22
+echo "  - Verifying SSH is listening on port 22:"
+ss -tlnp | grep ':22' || echo "WARNING: SSH is not listening on port 22"
+
+###############################################################################
 # 1. Prepare and mount game disk
 ###############################################################################
 
@@ -98,26 +115,42 @@ Section "Device"
     Identifier     "NvidiaGPU"
     Driver         "nvidia"
     VendorName     "NVIDIA Corporation"
-    Option         "AllowEmptyInitialConfiguration"
     Option         "PrimaryGPU" "yes"
+    Option         "AllowEmptyInitialConfiguration"
 EndSection
 EOF
 
 # 2️⃣ Permanently disable Wayland (required for NVIDIA passthrough)
+#     (GDM reads this file; keep it minimal and exact)
 sudo tee /etc/gdm3/custom.conf >/dev/null <<'EOF'
 [daemon]
 WaylandEnable=false
 EOF
 
-# 3️⃣ Enable NVIDIA DRM modeset (boot-time requirement)
+# 3️⃣ Ensure NVIDIA DRM modeset is enabled + modules load early (boot-time requirement)
 echo "options nvidia-drm modeset=1" | sudo tee /etc/modprobe.d/nvidia-drm.conf >/dev/null
 
-# Rebuild initramfs so changes persist across reboot
+# Load NVIDIA modules early on boot (prevents “works once / black screen” races)
+sudo tee /etc/modules-load.d/nvidia.conf >/dev/null <<'EOF'
+nvidia
+nvidia_modeset
+nvidia_uvm
+nvidia_drm
+EOF
+
+# Force kernel param too (most reliable across driver versions)
+if ! grep -q 'nvidia-drm.modeset=1' /etc/default/grub; then
+  sudo sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="nvidia-drm.modeset=1 /' /etc/default/grub
+fi
+
+# Rebuild initramfs + update grub so changes persist across reboot
 sudo update-initramfs -u
+sudo update-grub
 REBOOT_REQUIRED=1
 
-echo "  - NVIDIA display configuration applied"
+echo "  - NVIDIA display configuration applied (Xorg forced, DRM modeset forced)"
 echo ""
+
 
 ###############################################################################
 # 4. Install gaming packages (UPDATED LUTRIS SETUP)
