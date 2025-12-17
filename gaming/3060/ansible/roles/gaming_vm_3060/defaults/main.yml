@@ -3,7 +3,7 @@
 vm_name: "gpu-3060-gaming"
 
 # VM resources
-vm_os_disk_size: "25G"
+vm_os_disk_size: "50G"
 vm_ram_mb: 16384
 vm_vcpus: 8
 
