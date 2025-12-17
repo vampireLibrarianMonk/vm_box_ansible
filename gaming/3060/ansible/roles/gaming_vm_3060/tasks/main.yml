@@ -82,25 +82,16 @@
            - Print the exact PCI IDs required for passthrough
 
       ============================================================
-      VM INITIAL INSTALL (NO GPU ATTACHED YET)
-      ============================================================
-
-      2. Boot the VM normally (with default virtual graphics).
-      3. Install Ubuntu 22.04 inside the VM.
-      4. Log in once to confirm the OS boots successfully.
-      5. Shut down the VM.
-
-      ============================================================
       GPU ATTACH IN VIRT-MANAGER (VM MUST BE OFF)
       ============================================================
 
-      6. Open virt-manager → VM Details → Add Hardware → PCI Host Device
+      2. Open virt-manager → VM Details → Add Hardware → PCI Host Device
            - RTX 3060 GPU
            - RTX 3060 HDMI Audio
 
-      7. Remove "Video Virtio"
-      8. Set Display → None
-      9. Boot the VM using a monitor connected to the RTX 3060.
+      3. Remove "Video Virtio"
+      4. Set Display → None
+      5. Boot the VM using a monitor connected to the RTX 3060.
 
       ============================================================
       IN-GUEST GAMING SETUP (INSIDE THE VM)
@@ -109,29 +100,29 @@
       The in-guest setup script has been staged at:
           {{ vm_in_guest_script_staging_dir }}/{{ vm_in_guest_script_name }}
 
-      10. Transfer the script into the VM:
+      6. Transfer the script into the VM:
             scp {{ vm_in_guest_script_staging_dir }}/{{ vm_in_guest_script_name }} user@VM-IP:~/
             OR use virt-manager → View → File Transfer
 
-      11. Inside the VM, run:
+      7. Inside the VM, run:
             sudo bash {{ vm_in_guest_script_name }}
 
       ============================================================
       POST-SETUP (IMPORTANT)
       ============================================================
 
-      12. Reboot the VM if prompted by the script.
-      13. Launch Lutris (Flatpak):
+      8. Reboot the VM if prompted by the script.
+      9. Launch Lutris (Flatpak):
             flatpak run net.lutris.Lutris
 
-      14. In Lutris → Preferences → Runners:
+      10. In Lutris → Preferences → Runners:
             - Set Wine runner to Proton-GE (latest) or Wine 10.x
             - Ensure DXVK is enabled
 
-      15. Install Battle.net into:
+      11. Install Battle.net into:
             /mnt/games/BattleNet
 
-      16. Install StarCraft into:
+      12. Install StarCraft into:
             /mnt/games/SC2
 
       ============================================================
