@@ -105,4 +105,23 @@
         - Install NVIDIA proprietary drivers
         - Log in to Steam and Battle.net on /mnt/games
 
+###############################################################################
+# DESTROY LOGIC (MANUAL / OPT-IN ONLY)
+#
+# This section NEVER runs during normal playbook execution.
+# It is only executed when explicitly invoked with:
+#
+#   ansible-playbook <playbook>.yml --tags destroy
+#
+# Disks are NOT deleted. Only the VM definition + runtime are removed.
+###############################################################################
 
+- name: Power off gaming VM if running
+  community.libvirt.virt:
+    name: "{{ vm_name }}"
+    state: destroyed
+  tags: destroy
+
+- name: Undefine gaming VM (remove XML + NVRAM)
+  command: virsh undefine {{ vm_name }} --nvram
+  tags: destroy

@@ -1,11 +1,14 @@
 <domain type='kvm'>
   <name>{{ vm_name }}</name>
+
   <memory unit='MiB'>{{ vm_ram_mb }}</memory>
   <vcpu placement='static'>{{ vm_vcpus }}</vcpu>
 
   <os>
     <type arch='x86_64' machine='q35'>hvm</type>
     <loader readonly='yes' type='pflash'>/usr/share/OVMF/OVMF_CODE.fd</loader>
+    <nvram>/var/lib/libvirt/qemu/nvram/{{ vm_name }}_VARS.fd</nvram>
+    <boot dev='hd'/>
   </os>
 
   <cpu mode='host-passthrough'/>
@@ -17,33 +20,37 @@
   </features>
 
   <devices>
+    <!-- OS Disk -->
     <disk type='file' device='disk'>
       <driver name='qemu' type='qcow2'/>
       <source file='{{ vm_os_disk }}'/>
       <target dev='vda' bus='virtio'/>
     </disk>
 
+    <!-- Game/Data Disk -->
     <disk type='file' device='disk'>
       <driver name='qemu' type='qcow2'/>
       <source file='{{ vm_game_disk }}'/>
       <target dev='vdb' bus='virtio'/>
     </disk>
 
+    <!-- Install ISO -->
     <disk type='file' device='cdrom'>
       <source file='{{ vm_iso_path }}'/>
       <target dev='sda' bus='sata'/>
       <readonly/>
     </disk>
 
+    <!-- Network -->
     <interface type='network'>
       <source network='default'/>
       <model type='virtio'/>
     </interface>
 
-    <graphics type='spice' autoport='yes'/>
+    <!-- No virtual graphics -->
     <video>
-      <model type='virtio'/>
+      <model type='none'/>
     </video>
+
   </devices>
 </domain>
-

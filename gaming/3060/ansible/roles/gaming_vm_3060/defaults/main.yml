@@ -1,16 +1,42 @@
 ---
+# VM identity
 vm_name: "gpu-3060-gaming"
+
+# VM resources
 vm_os_disk_size: "25G"
 vm_ram_mb: 16384
 vm_vcpus: 8
-vm_storage_dir: "{{ lookup('env','HOME') }}/vms"
+
+###############################################################################
+# LIBVIRT STORAGE (REQUIRED)
+#
+# libvirt runs QEMU as libvirt-qemu.
+# All disks and ISOs must be readable from a libvirt-owned path.
+###############################################################################
+
+# Root directory for VM storage (libvirt-safe)
+vm_storage_dir: "/var/lib/libvirt/images"
+
+# Primary OS disk (vda)
 vm_os_disk: "{{ vm_storage_dir }}/{{ vm_name }}.qcow2"
+
+# Shared game data disk (vdb)
 vm_game_disk: "{{ vm_storage_dir }}/game-data.qcow2"
 
-# Copy the in-guest setup script
-vm_in_guest_script_staging_dir: "{{ vm_storage_dir }}/{{ vm_name }}-in-guest"
+###############################################################################
+# IN-GUEST SCRIPT STAGING
+#
+# This is host-side only and does NOT need to be readable by QEMU.
+###############################################################################
+
+vm_in_guest_script_staging_dir: "{{ lookup('env','HOME') }}/vms/{{ vm_name }}-in-guest"
 vm_in_guest_script_name: "in_guest_gaming_setup.sh"
 vm_in_guest_script_source: "in_guest_gaming_setup.sh"
 
-# Set your Ubuntu ISO path
-vm_iso_path: "{{ lookup('env','HOME') }}/isos/ubuntu-22.04.5-desktop-amd64.iso"
+###############################################################################
+# INSTALL MEDIA (ISO)
+#
+# ISOs must also live under libvirt storage for permission safety.
+###############################################################################
+
+vm_iso_path: "{{ vm_storage_dir }}/ubuntu-22.04.5-desktop-amd64.iso"

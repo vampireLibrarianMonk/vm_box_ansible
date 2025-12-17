@@ -11,7 +11,10 @@ This stage defines the gaming VM and attaches disks.
 
 ### Command
 ```bash
-ansible-playbook gaming/3060/ansible/create_3060_gaming_vm.yml --ask-become-pass
+ansible-playbook gaming/3060/ansible/create_3060_gaming_vm.yml \
+  --tags create,postcheck \
+  --skip-tags destroy \
+  --ask-become-pass
 ```
 
 ### Expected Result
@@ -46,23 +49,27 @@ virt-manager
 
 ### 2. Modify `gpu-3060-gaming` (VM must be **OFF**)
 
-View the details via open --> view details:
+Open **virt-manager** → select **gpu-3060-gaming** → **Open** → **View Details**
+
+---
 
 #### Add PCI Devices
-- **Add Hardware → PCI Host Device**
-  - `01:00.0` → NVIDIA RTX 3060 GPU
-  - `01:00.1` → NVIDIA HDMI Audio
+- Click **Add Hardware**
+- Select **PCI Host Device**
+- Add **both** devices:
+  - `01:00.0` → **NVIDIA RTX 3060 GPU**
+  - `01:00.1` → **NVIDIA HDMI Audio**
 
-#### Remove Virtual Graphics
-- Remove **Video Virtio**
+> ⚠️ Both devices must be added or audio will not work and the GPU may fail to initialize.
 
-More detailed steps [here](gaming/3060/suppliment_video_virtio.md)
-
-#### Display
-- Set **Display → None**
+---
 
 #### Firmware (Verify)
-- Must be **UEFI (OVMF)**
+- Confirm **Firmware** is set to:
+  - **UEFI (OVMF)**
+- If not:
+  - Change firmware to **UEFI**
+  - Save, then re-open the VM details to confirm
 
 ---
 
@@ -110,7 +117,7 @@ Replace `###.###.###.###` with the actual VM IP.
 
 ### Copy the setup script from the host
 ```bash
-scp ~/vms/gpu-3060-gaming-in-guest/in_guest_gaming_setup.sh user@###.###.###.###:~/
+scp gaming/3060/ansible/roles/gaming_vm_3060/files/in_guest_gaming_setup.sh user@###.###.###.###:~/
 ```
 
 ### Run inside the VM
@@ -130,3 +137,55 @@ reboot
 - Game data survives VM rebuilds
 
 ---
+
+## Stage 7 — VM Teardown — Destroy libvirt VM (UEFI / OVMF)
+
+Use this stage to completely remove the VM created by:
+
+```bash
+ansible-playbook gaming/3060/ansible/create_3060_gaming_vm.yml \
+  --tags destroy \
+  --ask-become-pass
+```
+
+Replace `gpu-3060-gaming` if your VM name differs.
+
+---
+
+### Stop the VM (if running)
+```bash
+virsh destroy gpu-3060-gaming
+```
+
+---
+
+### Undefine the VM (required for UEFI / OVMF)
+```bash
+virsh undefine gpu-3060-gaming --nvram
+```
+
+---
+
+### Optional: Remove VM disk files
+Only run these if you want to permanently delete the VM storage.
+```bash
+rm -f /path/to/os_disk.qcow2
+rm -f /path/to/game_disk.qcow2
+```
+
+---
+
+### One-Line Cleanup (Safe)
+```bash
+virsh destroy gpu-3060-gaming || true && virsh undefine gpu-3060-gaming --nvram
+```
+
+---
+
+### Verify Removal
+```bash
+virsh list --all
+```
+
+Expected result: `gpu-3060-gaming` is no longer listed.
+
