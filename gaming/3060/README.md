@@ -141,9 +141,13 @@ reboot
 - Steam and Battle.net install to the shared game disk
 - Game data survives VM rebuilds
 
+## Stage 7 Start the Installs
+
+Lutris --> BattleNet --> Starcraft II [Here](setup/lutris-battlenet-runner.md)
+
 ---
 
-## Stage 7 — VM Teardown — Destroy libvirt VM (UEFI / OVMF)
+## Stage 8 — VM Teardown — Destroy libvirt VM (UEFI / OVMF)
 
 Use this stage to completely remove the VM created by:
 
