@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# ------------------------------------------------------------
+# Logging setup — log everything to <scriptname>.log
+# ------------------------------------------------------------
+SCRIPT_NAME="$(basename "$0")"
+LOG_FILE="${SCRIPT_NAME}.log"
+
+# Redirect ALL stdout + stderr to log file AND console
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
 echo "=== RTX 3060 Passthrough Helper Script ==="
+echo "Logging to: ${LOG_FILE}"
 echo ""
 
 ############################################
