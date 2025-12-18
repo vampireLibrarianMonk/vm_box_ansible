@@ -164,17 +164,7 @@ sudo dpkg --add-architecture i386 || true
 sudo apt update
 
 echo "  - Installing Steam, Wine, Vulkan (APT)"
-sudo apt install -y \
-    steam \
-    wine64 \
-    wine32 \
-    winetricks \
-    libvulkan1 \
-    libvulkan1:i386 \
-    flatpak
-
-echo "  - Removing broken APT Lutris (if present)"
-sudo apt remove -y lutris || true
+sudo apt install -y steam flatpak
 
 echo "  - Ensuring Flathub is configured"
 sudo flatpak remote-add --if-not-exists \
@@ -189,6 +179,12 @@ flatpak install -y flathub net.lutris.Lutris
 echo "  - Installing ProtonPlus (Flatpak)"
 flatpak install -y flathub com.vysp3r.ProtonPlus
 
+echo "  - Setting /mnt permissions (Flatpak)"
+flatpak override --user \
+  --filesystem=/mnt \
+  --device=all \
+  net.lutris.Lutris
+
 echo ""
 
 ###############################################################################
@@ -201,6 +197,30 @@ mkdir -p "${HOME}/Games"
 mkdir -p "${MOUNT_POINT}/SteamLibrary"
 mkdir -p "${MOUNT_POINT}/BattleNet"
 mkdir -p "${MOUNT_POINT}/SC2"
+
+echo ""
+
+###############################################################################
+# 6. Performance tuning for CPU-bound games (StarCraft II)
+#
+# - Installs Feral GameMode
+# - Enables userspace daemon
+# - Safe in VMs (non-fatal if CPU governor cannot be changed)
+# - Improves SC2 frame pacing and late-game performance
+###############################################################################
+
+echo "[Performance] Installing GameMode for CPU-bound workloads..."
+
+if ! command -v gamemoded >/dev/null 2>&1; then
+    sudo apt update
+    sudo apt install -y \
+        gamemode \
+        libgamemode0 \
+        libgamemodeauto0
+    REBOOT_REQUIRED=1
+else
+    echo "  - GameMode already installed"
+fi
 
 echo ""
 
@@ -229,74 +249,143 @@ fi
 
 cat <<'EOF'
 
-## Next Steps (Post-Setup — Required)
+## Next Steps (Post-Setup — **Required**)
 
-⚠️  Do not skip these steps. The default Lutris runner will cause Battle.net issues.
+⚠️ **Do not skip these steps.** Using the wrong Wine runner or enabling Proton/DXVK too early **will break Battle.net**.
+
+---
 
 ### 1. Reboot (if prompted)
 
-    sudo reboot
+```bash
+sudo reboot
+```
 
-### 2. Launch Lutris (Flatpak)
+### 2. Test GameMode
 
-    flatpak run net.lutris.Lutris
+User this command:
+```bash
+gamemoded -t
+```
 
-### 3. Configure the correct Wine runner BEFORE installing Battle.net
+Expected Output:
+```bash
+gamemode is running and responding
+```
 
-1. In Lutris, click:
-       ☰ → Preferences → Runners
-2. Scroll to:
-       Wine
-3. Click the gear icon
-4. Set Wine version to ONE of the following:
-       - Proton-GE (latest)
-         OR
-       - Highest available Wine 10.x / GE runner
-5. Ensure:
-       DXVK is enabled
-6. Click:
-       Save
+---
 
-❗ Using the default Lutris Wine runner WILL break Battle.net updates and UI.
+### 3. Launch Lutris (Flatpak **only**)
 
-### 4. Install Battle.net
+```bash
+flatpak run net.lutris.Lutris
+```
+
+> ❗ Do **not** launch Lutris from the distro package or desktop file tied to APT.
+
+---
+
+### 4. Install the **correct Wine runner** (before installing Battle.net)
+
+1. In Lutris, open:
+   - ☰ **Menu** → **Preferences** → **Runners**
+2. Scroll to **Wine**
+3. Click **Manage versions**
+4. Install **exactly one** of the following:
+   - ✅ **Wine-GE 8.x or newer** (recommended)
+5. Set the installed **Wine-GE** version as the default for Wine
+
+**Important rules:**
+- ❌ **Do NOT use Proton or Proton-GE for Battle.net**
+- ❌ Do NOT use the default Lutris Wine runner
+- ❌ Do NOT use system/apt Wine
+
+---
+
+### 5. Install Battle.net (Flatpak Lutris)
 
 1. Open a browser and go to:
-       https://lutris.net/games/battlenet/
-2. Click:
-       Install
-   (This will open Lutris)
+   - https://lutris.net/games/battlenet/
+2. Click **Install** (this opens Lutris)
 3. When prompted for install location, select:
-       /mnt/games/BattleNet
+   ```
+   /mnt/games/BattleNet
+   ```
 
-### 5. Verify Battle.net runner configuration
+---
 
-1. Right-click:
-       Battle.net → Configure
-2. Open:
-       Runner options
-3. Confirm Wine version matches:
-       Proton-GE / Wine 10.x
-4. Click:
-       Save
+### 6. Configure Battle.net **before first launch**
 
-### 6. Launch Battle.net and allow it to update
+1. In Lutris, right-click **Battle.net** → **Configure**
 
+#### Runner options
+- **Runner:** Wine
+- **Wine version:** **Wine-GE (the one you installed)**
+- **DXVK:** ❌ **OFF** (first launch)
+- **VKD3D:** ❌ OFF
+- **Esync / Fsync:** ❌ OFF
+
+#### System options → Environment variables
+Add **exactly**:
+```
+WINEDLLOVERRIDES=dxgi=n
+```
+
+> This forces OpenGL and prevents Vulkan/ANGLE crashes.
+
+Click **Save**.
+
+---
+
+### 7. Launch Battle.net and allow it to update
+
+- Click **Play** on Battle.net in Lutris
 - Log in to your Blizzard account
-- Allow the client to fully update (1–2 minutes)
+- **Do not click anything** until the client finishes updating (1–2 minutes)
 
-### 7. Install StarCraft (base game)
+Expected result:
+- Battle.net window stays open
+- Game list loads normally
 
-1. In Battle.net, select:
-       StarCraft
-2. Click:
-       Install
+---
+
+### 8. Install StarCraft II (base game)
+
+1. In Battle.net, select **StarCraft II**
+2. Click **Install**
 3. Set the install path to:
-       /mnt/games/SC2
+   ```
+   /mnt/games/SC2
+   ```
 
-### 8. First launch verification
+If files already exist at that path, Battle.net will **verify instead of re-downloading**.
 
-- Launch StarCraft once from Battle.net
-- Confirm the game reaches the main menu
+---
+
+### 9. First launch verification
+
+- Launch **StarCraft II** from Battle.net
+- Confirm the game reaches the **main menu**
+
+---
+
+### 10. Optional performance tuning (only after success)
+
+After StarCraft II launches successfully **once**:
+
+- ✅ You may enable **DXVK**
+- ❌ Keep **VKD3D disabled**
+- ❌ Do NOT switch Wine runners
+
+---
+
+## Absolute Don’ts
+
+- ❌ Do NOT use Proton for Battle.net
+- ❌ Do NOT install Wine via APT
+- ❌ Do NOT mix Flatpak Lutris with system Wine
+- ❌ Do NOT enable Vulkan/DXVK before Battle.net works
+
+Following these steps exactly makes the VM **fully reproducible** and avoids all known Battle.net failures on Linux.
 
 EOF
