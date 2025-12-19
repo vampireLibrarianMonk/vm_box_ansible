@@ -125,10 +125,19 @@ sudo apt install -y \
 echo "[3/6] Installing gaming packages..."
 
 ###############################################################################
-echo "[Lutris] Installing Flatpak Lutris..."
+###############################################################################
+echo "[Lutris] Installing Flatpak + Lutris..."
 
+sudo apt update
 sudo apt install -y flatpak
 
+# Ensure Flathub remote exists (required)
+if ! flatpak remote-list | grep -q '^flathub'; then
+  sudo flatpak remote-add --if-not-exists flathub \
+    https://dl.flathub.org/repo/flathub.flatpakrepo
+fi
+
+# Install Lutris
 flatpak install -y flathub net.lutris.Lutris
 
 echo "[Lutris] Granting /mnt filesystem access..."
@@ -138,7 +147,9 @@ flatpak override --user --filesystem=/mnt net.lutris.Lutris
 echo "[Lutris] Verifying Vulkan inside Lutris Flatpak..."
 
 flatpak run --command=vulkaninfo net.lutris.Lutris --summary || \
-  echo "WARNING: Vulkan validation inside Flatpak failed"
+  echo "WARNING: Vulkan validation inside Flatpak failed (check drivers/runtime)"
+
+echo "[Lutris] NOTE: If Lutris does not appear in menus, log out and back in."
 
 ###############################################################################
 
