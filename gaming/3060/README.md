@@ -109,10 +109,10 @@ Core(s) per socket:    8
 Socket(s):             1
 ```
 
-Now run:
+Now run each time you start up the vm:
 ```bash
 for i in {0..7}; do sudo virsh vcpupin gpu-3060-gaming "$i" "$i"; done
-virsh vcpupin gpu-3060-gaming\
+virsh vcpupin gpu-3060-gamingvirsh vcpupin gpu-3060-gaming
 ```
 
 Expected:
@@ -157,32 +157,18 @@ vnet0      xx:xx:xx:xx:xx:xx    ipv4         ###.###.###.###/##
 
 Replace `###.###.###.###` with the actual VM IP.
 
-### Copy the setup script from the host
+### Use the following to scp files to the vm
 ```bash
-scp gaming/3060/ansible/roles/gaming_vm_3060/files/in_guest_gaming_setup.sh user@###.###.###.###:~/
+scp {FULL_FILE_PATH} user@###.###.###.###:~/
 ```
 
-### Run inside the VM
-```bash
-bash in_guest_gaming_setup.sh
-```
-
-### Install NVIDIA Drivers
-```bash
-sudo ubuntu-drivers autoinstall
-reboot
-```
-
-### Expected Result
-- `/mnt/games` mounted and persistent
-- Steam and Battle.net install to the shared game disk
-- Game data survives VM rebuilds
-
-## Stage 7 Start the Installs
-
-Lutris --> BattleNet --> Starcraft II [Here](setup/lutris-battlenet-runner.md)
-
----
+The following markdowns will setup your vm for battlenet and starcraft 2.
+- gaming/01_openssh.md
+- gaming/02_gamedisk_mounts.md
+- gaming/03_nvidia_driver.md
+- gaming/04_gaming_packages.md
+- gaming/05_wine_drive.md
+- gaming/06_battlenet.md
 
 ## Stage 8 — VM Teardown — Destroy libvirt VM (UEFI / OVMF)
 

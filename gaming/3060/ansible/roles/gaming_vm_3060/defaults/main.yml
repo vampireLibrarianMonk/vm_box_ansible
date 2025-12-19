@@ -38,8 +38,6 @@ vm_game_disk: "{{ vm_storage_dir }}/game-data.qcow2"
 ###############################################################################
 
 vm_in_guest_script_staging_dir: "{{ lookup('env','HOME') }}/vms/{{ vm_name }}-in-guest"
-vm_in_guest_script_name: "in_guest_gaming_setup.sh"
-vm_in_guest_script_source: "in_guest_gaming_setup.sh"
 
 ###############################################################################
 # INSTALL MEDIA (ISO)
