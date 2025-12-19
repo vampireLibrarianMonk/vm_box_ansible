@@ -364,6 +364,8 @@ INSTALLER_PATH="${HOME}/Downloads/Battle.net-Setup.exe"
 
 mkdir -p "${HOME}/Downloads"
 
+sudo apt-get install curl -y
+
 curl -L \
   -o "${INSTALLER_PATH}" \
   "https://www.battle.net/download/getInstallerForGame?os=win&gameProgram=BATTLENET_APP&version=Live"
