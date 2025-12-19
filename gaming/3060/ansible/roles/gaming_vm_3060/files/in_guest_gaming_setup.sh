@@ -31,7 +31,7 @@ echo "[0/5] Setting up OpenSSH Server..."
 
 # Install OpenSSH server
 sudo apt-get update
-sudo apt-get install -y openssh-server
+sudo apt-get install -y openssh-server curl
 
 # Enable and start SSH service
 sudo systemctl enable --now ssh
@@ -364,8 +364,6 @@ INSTALLER_PATH="${HOME}/Downloads/Battle.net-Setup.exe"
 
 mkdir -p "${HOME}/Downloads"
 
-sudo apt-get install curl -y
-
 curl -L \
   -o "${INSTALLER_PATH}" \
   "https://www.battle.net/download/getInstallerForGame?os=win&gameProgram=BATTLENET_APP&version=Live"
@@ -386,13 +384,8 @@ flatpak run --command=wine net.lutris.Lutris "${INSTALLER_PATH}"
 
 Runner options:
 - Wine version: **Wine-GE 10.x**
-- DXVK: ❌ OFF
-- VKD3D: ❌ OFF
-
-Environment variables:
-```
-WINEDLLOVERRIDES=dxgi=n
-```
+- DXVK: ✅ ON
+- VKD3D: ✅ ON
 
 ---
 
@@ -414,13 +407,6 @@ Install path:
 ### 9. First launch verification
 
 Confirm StarCraft II reaches the main menu.
-
----
-
-### 10. Optional performance tuning (after success)
-
-- DXVK may be enabled
-- VKD3D should remain disabled
 
 ---
 

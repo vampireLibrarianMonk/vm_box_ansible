@@ -91,6 +91,43 @@ You should see the **Ubuntu installer on the physical monitor**, not inside virt
 
 ---
 
+### CPU Pinning
+
+CPU pinning is applied after the VM starts so each virtual CPU is permanently bound to a specific physical core, preventing scheduler migration, cache thrashing, and latency spikes that severely hurt single-thread-heavy games like StarCraft II.
+
+Run inside the guest:
+
+```bash
+lscpu | egrep 'CPU\(s\)|Thread|Core|Socket'
+```
+
+You must see:
+```bash
+CPU(s):                8
+Thread(s) per core:    1
+Core(s) per socket:    8
+Socket(s):             1
+```
+
+Now run:
+```bash
+for i in {0..7}; do sudo virsh vcpupin gpu-3060-gaming "$i" "$i"; done
+virsh vcpupin gpu-3060-gaming\
+```
+
+Expected:
+```bash
+VCPU  CPU Affinity
+0     0
+1     1
+2     2
+3     3
+4     4
+5     5
+6     6
+7     7
+```
+
 The follow the initial setup of ubuntu 22.04.5 [here](setup/Initial_Ubuntu_22_04_05_Setup.md)
 
 ## Stage 5 — Identify the VM IP Address (From Host)
