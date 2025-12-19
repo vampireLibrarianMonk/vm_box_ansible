@@ -91,7 +91,6 @@ echo "[2/6] Ensuring NVIDIA drivers are installed..."
 
 ###############################################################################
 # Host GPU + Vulkan sanity checks (manual verification)
-#
 echo "[GPU] Installing Vulkan/OpenGL diagnostic tools..."
 
 sudo apt update
@@ -106,8 +105,6 @@ glxinfo | grep "OpenGL renderer" || echo "WARNING: OpenGL renderer not detected"
 vulkaninfo | head -n 5 || echo "WARNING: Vulkan info failed"
 
 ###############################################################################
-
-###############################################################################
 echo "[GPU] Ensuring NVIDIA 580 driver stack is installed..."
 
 sudo apt install -y \
@@ -115,6 +112,40 @@ sudo apt install -y \
   libnvidia-gl-580 \
   libnvidia-gl-580:i386 \
   nvidia-utils-580
+
+###############################################################################
+# Display Manager hardening (REQUIRED for GPU passthrough)
+echo "[GPU] Disabling Wayland (required for NVIDIA passthrough)..."
+
+if [ -f /etc/gdm3/custom.conf ]; then
+  sudo sed -i 's/^#WaylandEnable=false/WaylandEnable=false/' /etc/gdm3/custom.conf
+  sudo sed -i 's/^WaylandEnable=true/WaylandEnable=false/' /etc/gdm3/custom.conf
+else
+  echo "WARNING: /etc/gdm3/custom.conf not found"
+fi
+
+###############################################################################
+echo "[GPU] Forcing NVIDIA as primary GPU (Xorg)..."
+
+sudo mkdir -p /etc/X11/xorg.conf.d
+
+sudo tee /etc/X11/xorg.conf.d/10-nvidia-primary.conf >/dev/null <<'EOF'
+Section "Device"
+    Identifier  "NVIDIA GPU"
+    Driver      "nvidia"
+    Option      "PrimaryGPU" "true"
+EndSection
+EOF
+
+###############################################################################
+echo "[GPU] Updating initramfs to ensure NVIDIA loads early..."
+
+sudo update-initramfs -u
+
+###############################################################################
+echo "[GPU] NVIDIA + display configuration complete"
+###############################################################################
+
 
 ###############################################################################
 
