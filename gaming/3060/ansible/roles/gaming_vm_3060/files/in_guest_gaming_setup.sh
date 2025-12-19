@@ -16,12 +16,12 @@ set -Eeuo pipefail
 
 GAME_DISK="/dev/vdb"
 MOUNT_POINT="/mnt/games"
-REBOOT_REQUIRED=0
 
-echo "============================================================"
-echo " In-Guest Gaming VM Setup"
-echo "============================================================"
-echo ""
+cat <<'BANNER'
+============================================================
+ In-Guest Gaming VM Setup
+============================================================
+BANNER
 
 ###############################################################################
 # 0. OpenSSH Server Setup
@@ -44,7 +44,7 @@ ss -tlnp | grep ':22' || echo "WARNING: SSH is not listening on port 22"
 # 1. Prepare and mount game disk
 ###############################################################################
 
-echo "[1/5] Preparing game disk..."
+echo "[1/6] Preparing game disk..."
 
 sudo mkdir -p "${MOUNT_POINT}"
 
@@ -87,111 +87,124 @@ echo ""
 # 2. Install NVIDIA drivers (idempotent)
 ###############################################################################
 
-echo "[2/5] Ensuring NVIDIA drivers are installed..."
-
-if ! command -v nvidia-smi >/dev/null 2>&1; then
-    echo "  - NVIDIA drivers not detected"
-    echo "  - Installing recommended NVIDIA drivers"
-    sudo apt update
-    sudo ubuntu-drivers autoinstall
-    REBOOT_REQUIRED=1
-else
-    echo "  - NVIDIA drivers already installed"
-fi
-
-echo ""
+echo "[2/6] Ensuring NVIDIA drivers are installed..."
 
 ###############################################################################
-# 3. NVIDIA Passthrough Primary Display Fix (Ubuntu 22.04)
-###############################################################################
-
-echo "[3/5] Applying NVIDIA passthrough display fixes..."
-
-# 1️⃣ Force Xorg to bind NVIDIA as primary GPU
-sudo mkdir -p /etc/X11/xorg.conf.d
-
-sudo tee /etc/X11/xorg.conf.d/10-nvidia.conf >/dev/null <<'EOF'
-Section "Device"
-    Identifier     "NvidiaGPU"
-    Driver         "nvidia"
-    VendorName     "NVIDIA Corporation"
-    Option         "PrimaryGPU" "yes"
-    Option         "AllowEmptyInitialConfiguration"
-EndSection
-EOF
-
-# 2️⃣ Permanently disable Wayland (required for NVIDIA passthrough)
-#     (GDM reads this file; keep it minimal and exact)
-sudo tee /etc/gdm3/custom.conf >/dev/null <<'EOF'
-[daemon]
-WaylandEnable=false
-EOF
-
-# 3️⃣ Ensure NVIDIA DRM modeset is enabled + modules load early (boot-time requirement)
-echo "options nvidia-drm modeset=1" | sudo tee /etc/modprobe.d/nvidia-drm.conf >/dev/null
-
-# Load NVIDIA modules early on boot (prevents “works once / black screen” races)
-sudo tee /etc/modules-load.d/nvidia.conf >/dev/null <<'EOF'
-nvidia
-nvidia_modeset
-nvidia_uvm
-nvidia_drm
-EOF
-
-# Force kernel param too (most reliable across driver versions)
-if ! grep -q 'nvidia-drm.modeset=1' /etc/default/grub; then
-  sudo sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="nvidia-drm.modeset=1 /' /etc/default/grub
-fi
-
-# Rebuild initramfs + update grub so changes persist across reboot
-sudo update-initramfs -u
-sudo update-grub
-REBOOT_REQUIRED=1
-
-echo "  - NVIDIA display configuration applied (Xorg forced, DRM modeset forced)"
-echo ""
-
-
-###############################################################################
-# 4. Install gaming packages (UPDATED LUTRIS SETUP)
-###############################################################################
-
-echo "[4/5] Installing gaming packages..."
-
-echo "  - Enabling 32-bit architecture"
-sudo dpkg --add-architecture i386 || true
+# Host GPU + Vulkan sanity checks (manual verification)
+#
+echo "[GPU] Installing Vulkan/OpenGL diagnostic tools..."
 
 sudo apt update
+sudo apt install -y mesa-utils vulkan-tools
 
-echo "  - Installing Steam, Wine, Vulkan (APT)"
-sudo apt install -y steam flatpak
+echo "[GPU] Running NVIDIA + Vulkan sanity checks..."
 
-echo "  - Ensuring Flathub is configured"
-sudo flatpak remote-add --if-not-exists \
-    flathub https://flathub.org/repo/flathub.flatpakrepo
+nvidia-smi || echo "WARNING: nvidia-smi failed"
 
-echo "  - Granting Lutris Flatpak access to /mnt"
-flatpak override --user --filesystem=/mnt net.lutris.Lutris
+glxinfo | grep "OpenGL renderer" || echo "WARNING: OpenGL renderer not detected"
 
-echo "  - Installing Lutris (Flatpak)"
+vulkaninfo | head -n 5 || echo "WARNING: Vulkan info failed"
+
+###############################################################################
+
+###############################################################################
+echo "[GPU] Ensuring NVIDIA 580 driver stack is installed..."
+
+sudo apt install -y \
+  nvidia-driver-580 \
+  libnvidia-gl-580 \
+  libnvidia-gl-580:i386 \
+  nvidia-utils-580
+
+###############################################################################
+
+###############################################################################
+# 3. Install gaming packages (UPDATED LUTRIS SETUP)
+###############################################################################
+
+echo "[3/6] Installing gaming packages..."
+
+###############################################################################
+echo "[Lutris] Installing Flatpak Lutris..."
+
 flatpak install -y flathub net.lutris.Lutris
 
-echo "  - Installing ProtonPlus (Flatpak)"
-flatpak install -y flathub com.vysp3r.ProtonPlus
+echo "[Lutris] Granting /mnt filesystem access..."
 
-echo "  - Setting /mnt permissions (Flatpak)"
-flatpak override --user \
-  --filesystem=/mnt \
-  --device=all \
-  net.lutris.Lutris
+flatpak override --user --filesystem=/mnt net.lutris.Lutris
 
-echo ""
+echo "[Lutris] Verifying Vulkan inside Lutris Flatpak..."
+
+flatpak run --command=vulkaninfo net.lutris.Lutris --summary || \
+  echo "WARNING: Vulkan validation inside Flatpak failed"
+
+###############################################################################
+
+###############################################################################
+echo "[Flatpak] Installing required Freedesktop 23.08 runtimes..."
+
+flatpak install -y flathub \
+  org.freedesktop.Platform.ffmpeg-full//23.08 \
+  org.freedesktop.Platform.GL.default//23.08 \
+  org.freedesktop.Platform.GL32.default//23.08 \
+  org.freedesktop.Platform.Locale//23.08 \
+  org.freedesktop.Platform.VulkanLayer.MangoHud//23.08 \
+  org.freedesktop.Platform.Compat.i386//23.08 \
+  org.freedesktop.Platform.Compat.i386.Debug//23.08
+
+###############################################################################
+
+###############################################################################
+# 4. Drive mapping (Wine)
+###############################################################################
+
+echo "[4/7] Configuring Wine drive mapping for /mnt/games..."
+
+WINEPREFIX="${HOME}/Games/battlenet"
+export WINEPREFIX
+
+echo "  - Launching winecfg for prefix: ${WINEPREFIX}"
+
+echo "[4/6] Configuring Wine drive mapping for /mnt/games (automated)..."
+
+WINEPREFIX="${HOME}/Games/battlenet"
+export WINEPREFIX
+
+DOSDEVICES_DIR="${WINEPREFIX}/dosdevices"
+
+mkdir -p "${DOSDEVICES_DIR}"
+
+if [[ ! -e "${DOSDEVICES_DIR}/g:" ]]; then
+    echo "  - Creating Wine drive G: → /mnt/games"
+    ln -s /mnt/games "${DOSDEVICES_DIR}/g:"
+else
+    echo "  - Wine drive G: already exists, skipping"
+fi
+
+echo "  - Verifying Wine drive mappings:"
+ls -l "${DOSDEVICES_DIR}" | grep "g:" || echo "WARNING: G: drive not detected"
+
+echo "  - Wine drive mapping complete (winecfg not required)"
+
+###############################################################################
+
+###############################################################################
+# Configure Battle.net to install StarCraft II to /mnt/games
+#
+# In Battle.net Settings → Downloads:
+#   Default install location:
+#     G:\StarCraft II
+#
+# Then install/download StarCraft II.
+###############################################################################
+
+###############################################################################
 
 ###############################################################################
 # 5. Create standard game directories
 ###############################################################################
 
-echo "[5/5] Creating game directories..."
+echo "[5/6] Creating game directories..."
 
 mkdir -p "${HOME}/Games"
 mkdir -p "${MOUNT_POINT}/SteamLibrary"
@@ -201,7 +214,7 @@ mkdir -p "${MOUNT_POINT}/SC2"
 echo ""
 
 ###############################################################################
-# 6. Performance tuning for CPU-bound games (StarCraft II)
+# 5. Performance tuning for CPU-bound games (StarCraft II)
 #
 # - Installs Feral GameMode
 # - Enables userspace daemon
@@ -209,7 +222,7 @@ echo ""
 # - Improves SC2 frame pacing and late-game performance
 ###############################################################################
 
-echo "[Performance] Installing GameMode for CPU-bound workloads..."
+echo "[6/6] Installing GameMode for CPU-bound workloads..."
 
 if ! command -v gamemoded >/dev/null 2>&1; then
     sudo apt update
@@ -217,7 +230,6 @@ if ! command -v gamemoded >/dev/null 2>&1; then
         gamemode \
         libgamemode0 \
         libgamemodeauto0
-    REBOOT_REQUIRED=1
 else
     echo "  - GameMode already installed"
 fi
@@ -228,26 +240,16 @@ echo ""
 # Final summary
 ###############################################################################
 
-echo "============================================================"
-echo " Setup Complete"
-echo "============================================================"
-echo ""
-echo "Game disk mount point:       ${MOUNT_POINT}"
-echo "Steam library path:          ${MOUNT_POINT}/SteamLibrary"
-echo "Battle.net install path:     ${MOUNT_POINT}/BattleNet"
-echo "StarCraft II install path:   ${MOUNT_POINT}/SC2"
-echo ""
+cat <<SUMMARY
+============================================================
+ Setup Complete
+============================================================
 
-if [[ "${REBOOT_REQUIRED}" -eq 1 ]]; then
-    echo "IMPORTANT:"
-    echo "  System changes require a reboot."
-    echo ""
-    echo "      sudo reboot"
-else
-    echo "No reboot required."
-fi
-
-cat <<'EOF'
+Game disk mount point:       ${MOUNT_POINT}
+Steam library path:          ${MOUNT_POINT}/SteamLibrary
+Battle.net install path:     ${MOUNT_POINT}/BattleNet
+StarCraft II install path:   ${MOUNT_POINT}/SC2
+SUMMARY
 
 ## Next Steps (Post-Setup — **Required**)
 
@@ -263,14 +265,56 @@ sudo reboot
 
 ### 2. Test GameMode
 
-User this command:
+Use this command:
 ```bash
 gamemoded -t
 ```
 
-Expected Output:
-```bash
-gamemode is running and responding
+Expected output (full sample output; CPU governor errors are **expected** in VMs and are non-fatal):
+```text
+: Loading config
+Loading config file [/usr/share/gamemode/gamemode.ini]
+: Running tests
+
+:: Basic client tests
+:: Passed
+
+:: Dual client tests
+gamemode request succeeded and is active
+Quitting by request...
+:: Passed
+
+:: Gamemoderun and reaper thread tests
+...Waiting for child to quit...
+...Waiting for reaper thread (reaper_frequency set to 5 seconds)...
+:: Passed
+
+:: Supervisor tests
+:: Passed
+
+:: Feature tests
+::: Verifying CPU governor setting
+ERROR: glob failed for cpu governors: (No such file or directory)
+ERROR: glob failed for cpu governors: (No such file or directory)
+ERROR: Governor was not set to performance (was actually )!
+::: Failed!
+
+::: Verifying Scripts
+::: Passed (no scripts configured to run)
+
+::: Verifying GPU Optimisations
+::: Passed (gpu optimisations not configured to run)
+
+::: Verifying renice
+::: Passed (no renice configured)
+
+::: Verifying ioprio
+::: Passed
+
+ERROR: :: Failed!
+: Tests Failed!
+```text
+... Tests Failed!
 ```
 
 ---
@@ -281,111 +325,88 @@ gamemode is running and responding
 flatpak run net.lutris.Lutris
 ```
 
-> ❗ Do **not** launch Lutris from the distro package or desktop file tied to APT.
+> ❗ Do **not** launch Lutris from the distro package or an APT-based desktop entry.
 
 ---
 
 ### 4. Install the **correct Wine runner** (before installing Battle.net)
 
-1. In Lutris, open:
-   - ☰ **Menu** → **Preferences** → **Runners**
-2. Scroll to **Wine**
-3. Click **Manage versions**
-4. Install **exactly one** of the following:
-   - ✅ **Wine-GE 8.x or newer** (recommended)
-5. Set the installed **Wine-GE** version as the default for Wine
+- Menu → Preferences → Runners → Wine → Manage versions
+- Install **Wine-GE 10.x or newer**
+- Set it as the default Wine version
 
-**Important rules:**
-- ❌ **Do NOT use Proton or Proton-GE for Battle.net**
-- ❌ Do NOT use the default Lutris Wine runner
-- ❌ Do NOT use system/apt Wine
+**Rules:**
+- ❌ No Proton / Proton-GE
+- ❌ No default Lutris Wine
+- ❌ No system Wine
 
 ---
 
 ### 5. Install Battle.net (Flatpak Lutris)
 
-1. Open a browser and go to:
-   - https://lutris.net/games/battlenet/
-2. Click **Install** (this opens Lutris)
-3. When prompted for install location, select:
-   ```
-   /mnt/games/BattleNet
-   ```
+- Use the following install location `/mnt/games/BattleNet`:
+
+```bash
+INSTALLER_PATH="${HOME}/Downloads/Battle.net-Setup.exe"
+
+mkdir -p "${HOME}/Downloads"
+
+curl -L \
+  -o "${INSTALLER_PATH}" \
+  "https://www.battle.net/download/getInstallerForGame?os=win&gameProgram=BATTLENET_APP&version=Live"
+
+FILE_INFO="$(file "${INSTALLER_PATH}" || true)"
+
+if ! echo "${FILE_INFO}" | grep -q "PE32 executable"; then
+    echo "WARNING: Installer does not appear to be a valid Windows executable"
+    echo "WARNING: Battle.net installation may fail"
+fi
+
+flatpak run --command=wine net.lutris.Lutris "${INSTALLER_PATH}"
+```
 
 ---
 
 ### 6. Configure Battle.net **before first launch**
 
-1. In Lutris, right-click **Battle.net** → **Configure**
+Runner options:
+- Wine version: **Wine-GE 10.x**
+- DXVK: ❌ OFF
+- VKD3D: ❌ OFF
 
-#### Runner options
-- **Runner:** Wine
-- **Wine version:** **Wine-GE (the one you installed)**
-- **DXVK:** ❌ **OFF** (first launch)
-- **VKD3D:** ❌ OFF
-- **Esync / Fsync:** ❌ OFF
-
-#### System options → Environment variables
-Add **exactly**:
+Environment variables:
 ```
 WINEDLLOVERRIDES=dxgi=n
 ```
-
-> This forces OpenGL and prevents Vulkan/ANGLE crashes.
-
-Click **Save**.
 
 ---
 
 ### 7. Launch Battle.net and allow it to update
 
-- Click **Play** on Battle.net in Lutris
-- Log in to your Blizzard account
-- **Do not click anything** until the client finishes updating (1–2 minutes)
-
-Expected result:
-- Battle.net window stays open
-- Game list loads normally
+Wait for the client to fully update before interacting.
 
 ---
 
-### 8. Install StarCraft II (base game)
+### 8. Install StarCraft II
 
-1. In Battle.net, select **StarCraft II**
-2. Click **Install**
-3. Set the install path to:
-   ```
-   /mnt/games/SC2
-   ```
-
-If files already exist at that path, Battle.net will **verify instead of re-downloading**.
+Install path:
+```
+/mnt/games/SC2
+```
 
 ---
 
 ### 9. First launch verification
 
-- Launch **StarCraft II** from Battle.net
-- Confirm the game reaches the **main menu**
+Confirm StarCraft II reaches the main menu.
 
 ---
 
-### 10. Optional performance tuning (only after success)
+### 10. Optional performance tuning (after success)
 
-After StarCraft II launches successfully **once**:
-
-- ✅ You may enable **DXVK**
-- ❌ Keep **VKD3D disabled**
-- ❌ Do NOT switch Wine runners
+- DXVK may be enabled
+- VKD3D should remain disabled
 
 ---
-
-## Absolute Don’ts
-
-- ❌ Do NOT use Proton for Battle.net
-- ❌ Do NOT install Wine via APT
-- ❌ Do NOT mix Flatpak Lutris with system Wine
-- ❌ Do NOT enable Vulkan/DXVK before Battle.net works
-
-Following these steps exactly makes the VM **fully reproducible** and avoids all known Battle.net failures on Linux.
 
 EOF
