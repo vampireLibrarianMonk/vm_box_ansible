@@ -127,6 +127,8 @@ echo "[3/6] Installing gaming packages..."
 ###############################################################################
 echo "[Lutris] Installing Flatpak Lutris..."
 
+sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
 flatpak install -y flathub net.lutris.Lutris
 
 echo "[Lutris] Granting /mnt filesystem access..."
