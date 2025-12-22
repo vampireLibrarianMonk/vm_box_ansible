@@ -150,7 +150,8 @@ EOF
 Edit GRUB:
 
 ```bash
-sudo nano /etc/default/grub
+sudo apt-get install -y vim
+sudo vim /etc/default/grub
 ```
 
 Change:
@@ -203,12 +204,12 @@ sudo reboot
 ### Confirm X11 Session
 
 ```bash
-loginctl show-session $(loginctl | awk '/tty/{print $1}') -p Type
+echo $XDG_SESSION_TYPE
 ```
 
 Expected:
 ```
-Type=x11
+Type=x11 # be careful ssh shows tty
 ```
 
 ### Confirm NVIDIA Owns Rendering

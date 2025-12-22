@@ -15,7 +15,24 @@ flatpak run net.lutris.Lutris
 
 ---
 
-### Step 2 — Search for Battle.net inside Lutris
+### Step 2 — Configure the Wine runner (BEFORE first launch)
+
+Lutris → Battle.net → **Configure** → **Runner options**
+
+Set the following:
+
+- **Wine version:** 
+  - Manage Versions: Install Wine-GE 10.x or newer
+  - Wine Version: Use the Wine-GE 10.x or newer
+- I did not touch any other settings, your on your own here.
+
+❌ Do not use Proton  
+❌ Do not use system Wine  
+❌ Do not use default Lutris Wine
+
+---
+
+### Step 3 — Search for Battle.net inside Lutris
 
 In the Lutris UI:
 
@@ -27,7 +44,7 @@ In the Lutris UI:
 
 ---
 
-### Step 3 — Set the install location (IMPORTANT)
+### Step 4 — Set the install location (IMPORTANT)
 
 When prompted for the installation directory, **use exactly**:
 
@@ -39,22 +56,15 @@ When prompted for the installation directory, **use exactly**:
 ⚠️ Do not accept the default path  
 ⚠️ Do not change this later
 
----
+When prompted peform the Wine Mono Installer.
 
-### Step 4 — Configure the Wine runner (BEFORE first launch)
+Choose your default language.
 
-After installation, but **before launching Battle.net**:
+Install BattleNet.
 
-Lutris → Battle.net → **Configure** → **Runner options**
+Do not log into until after the launch wizard completes, close any intermediate login window.
 
-Set the following:
-
-- **Wine version:** Wine-GE 10.x or newer
-- I did not touch any other settings, your on your own here.
-
-❌ Do not use Proton  
-❌ Do not use system Wine  
-❌ Do not use default Lutris Wine
+I stay logged in by default.
 
 ---
 
@@ -67,6 +77,10 @@ Confirm the following directory exists:
 ```
 
 If it does not exist, **stop and fix the install path before proceeding**.
+
+---
+
+Go to [06_wind_drive](gaming/06_wine_drive.md) to setup the wine drive.
 
 ---
 

@@ -55,6 +55,43 @@
     groups: "libvirt,libvirt-qemu"
     append: yes
 
+###############################################################################
+# GRUB | Ensure IOMMU enabled (AMD passthrough host)
+###############################################################################
+
+- name: GRUB | Read current kernel cmdline defaults
+  command: grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub
+  register: grub_cmdline
+  changed_when: false
+
+- name: GRUB | Ensure IOMMU flags present
+  set_fact:
+    new_grub_cmdline: >-
+      {{
+        grub_cmdline.stdout
+        | regex_replace('"$', '')
+        ~ ' amd_iommu=on iommu=pt"'
+        if 'amd_iommu=on' not in grub_cmdline.stdout
+        else grub_cmdline.stdout
+      }}
+
+- name: GRUB | Update GRUB kernel parameters if needed
+  lineinfile:
+    path: /etc/default/grub
+    regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
+    line: "{{ new_grub_cmdline }}"
+  register: grub_updated
+
+- name: GRUB | Update grub configuration
+  command: update-grub
+  when: grub_updated.changed
+  register: grub_update_result
+
+- name: GRUB | Mark reboot required
+  set_fact:
+    reboot_required: true
+  when: grub_updated.changed
+
 - name: Create VM storage directory
   file:
     path: "{{ vm_storage_dir }}"
@@ -65,4 +102,9 @@
   debug:
     msg: |
       Base VM Infrastructure Setup Complete.
-      REBOOT recommended before creating VMs.
+
+      {% if reboot_required | default(false) %}
+      ⚠️  GRUB updated — reboot REQUIRED before creating passthrough VMs.
+      {% else %}
+      No reboot required.
+      {% endif %}

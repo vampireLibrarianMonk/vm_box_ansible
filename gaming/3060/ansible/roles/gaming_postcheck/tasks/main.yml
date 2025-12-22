@@ -16,11 +16,16 @@
 # ------------------------------------------------------------
 # IOMMU
 # ------------------------------------------------------------
-- name: POSTCHECK | Check IOMMU enabled
-  shell: dmesg | grep -E 'IOMMU enabled|AMD-Vi|DMAR'
-  register: iommu_check
+- name: POSTCHECK | Check IOMMU enabled via kernel cmdline
+  shell: cat /proc/cmdline
+  register: cmdline
   changed_when: false
-  failed_when: iommu_check.rc != 0
+
+- name: POSTCHECK | Assert IOMMU flags present
+  assert:
+    that:
+      - "'iommu=' in cmdline.stdout or 'intel_iommu=' in cmdline.stdout or 'amd_iommu=' in cmdline.stdout"
+    fail_msg: "IOMMU kernel parameters not detected in /proc/cmdline"
 
 # ------------------------------------------------------------
 # VFIO

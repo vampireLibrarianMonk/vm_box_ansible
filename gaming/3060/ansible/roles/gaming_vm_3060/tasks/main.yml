@@ -37,8 +37,8 @@
 
 - name: Define gaming VM
   command: virsh define /tmp/{{ vm_name }}.xml
-  args:
-    creates: "/etc/libvirt/qemu/{{ vm_name }}.xml"
+  register: define_result
+  changed_when: "'defined' in define_result.stdout"
 
 ###############################################################################
 # DESTROY LOGIC (MANUAL / OPT-IN ONLY)
@@ -55,8 +55,11 @@
   community.libvirt.virt:
     name: "{{ vm_name }}"
     state: destroyed
+  failed_when: false
   tags: destroy
 
 - name: Undefine gaming VM (remove XML + NVRAM)
   command: virsh undefine {{ vm_name }} --nvram
+  failed_when: false
   tags: destroy
+

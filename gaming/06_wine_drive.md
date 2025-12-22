@@ -32,9 +32,8 @@ Before proceeding, confirm the following:
 ## Step 1 — Open Battle.net Wine Configuration
 
 1. Open **Lutris**
-2. Right-click **Battle.net**
-3. Click **Configure**
-4. Go to **Runner options**
+2. Select **Battle.net**
+4. Go to bottom middle drop down menu (next to `Platform:` information).
 5. Click **Wine configuration**
 
 This launches `winecfg` for the Battle.net Wine prefix.
@@ -84,33 +83,4 @@ Wine now treats `/mnt/games` as a real disk.
    - Path is set to `/mnt/games`
 
 ---
-
-## Step 4 — Use the Drive in Battle.net
-
-1. Launch **Battle.net**
-2. When installing a game (e.g., **StarCraft II**), set the install location to:
-
-```
-G:\StarCraft II
-```
-
----
-
-## Expected Results
-
-After completing these steps:
-
-- ✅ Battle.net correctly detects available disk space
-- ✅ Game files are stored under `/mnt/games`
-- ✅ Installs are stable and consistent
-- ✅ No reliance on Wine’s `Z:` mapping
-- ✅ Configuration persists across reboots
-
----
-
-## Notes
-
-- This process only needs to be done **once per Wine prefix**
-- If you delete or recreate the Battle.net prefix, repeat these steps
-- This approach works for **any large Battle.net game**
 
